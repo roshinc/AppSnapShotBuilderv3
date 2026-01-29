@@ -1,14 +1,13 @@
 package gov.nystax.nimbus.codesnap.services.scanner.domain;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import gov.nystax.nimbus.codesnap.domain.ProjectSnap;
 
 import java.util.*;
 
 /**
  * Represents information about a Maven project.
  */
-public class ProjectInfo implements ProjectSnap {
+public class ProjectInfo {
 
 
     @JsonProperty("projectPath")
