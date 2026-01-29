@@ -1,4 +1,4 @@
-# Copilot Instructions for AppSnapShotBuilderv3
+# Copilot Instructions for Scan Data Processor
 
 ## Project Overview
 
@@ -31,9 +31,11 @@ src/
 │   │   └── ...
 │   └── services/processor/          # Processing logic
 │       ├── ScanDataProcessor.java    # Main processor
-│       ├── domain/                   # Processed data models
-│       │   └── ScanData.java         # Processed output
-│       └── ...
+│       ├── ServiceScanService.java
+│       ├── ServiceScanRecordFactory.java
+│       ├── dao/                      # Data access objects
+│       └── domain/                   # Processed data models
+│           └── ScanData.java         # Processed output
 └── test/java/                       # JUnit tests
 ```
 
