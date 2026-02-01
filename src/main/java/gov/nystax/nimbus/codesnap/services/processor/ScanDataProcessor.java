@@ -39,6 +39,12 @@ public class ScanDataProcessor {
     private static final String INVOCATION_TYPE_EXECUTE_ASYNC = "executeAsync";
 
     /**
+     * Placeholder topic name used when the topic cannot be resolved at scan time.
+     * This applies to both UNKNOWN_VARIABLE and UNKNOWN_COMPLEX topic resolutions.
+     */
+    public static final String UNKNOWN_TOPIC_PLACEHOLDER = "<unknown-topic>";
+
+    /**
      * Processes a ProjectInfo scan result into pre-processed ScanData.
      *
      * @param projectInfo the raw scanner output
@@ -322,14 +328,18 @@ public class ScanDataProcessor {
         }
 
         for (EventPublisherInvocation invocation : invocations) {
-            // Only process resolved topics
-            if (invocation.getTopicResolution() != TopicResolution.RESOLVED) {
-                LOGGER.log(Level.FINE, "Skipping unresolved topic at {0}: resolution={1}",
+            // Determine the topic name based on resolution status
+            String topic;
+            if (invocation.getTopicResolution() == TopicResolution.RESOLVED) {
+                topic = invocation.getTopic();
+            } else {
+                // For UNKNOWN_VARIABLE and UNKNOWN_COMPLEX, use a placeholder topic name
+                // The invocation is still significant for owner detection and should appear in the tree
+                topic = UNKNOWN_TOPIC_PLACEHOLDER;
+                LOGGER.log(Level.FINE, "Using placeholder for unresolved topic at {0}: resolution={1}",
                         new Object[]{invocation.getInvocationSite(), invocation.getTopicResolution()});
-                continue;
             }
 
-            String topic = invocation.getTopic();
             List<MethodReference> callChain = invocation.getCallChain();
 
             if (callChain == null || callChain.isEmpty()) {
