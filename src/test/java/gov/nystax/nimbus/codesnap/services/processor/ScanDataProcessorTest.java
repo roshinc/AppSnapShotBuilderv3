@@ -377,8 +377,8 @@ class ScanDataProcessorTest {
         }
 
         @Test
-        @DisplayName("Should skip unresolved topics")
-        void skipUnresolvedTopics() {
+        @DisplayName("Should process UNKNOWN_VARIABLE topic with placeholder")
+        void processUnknownVariableTopic() {
             ProjectInfo projectInfo = createBasicProjectInfo();
 
             Map<String, String> functionMappings = new HashMap<>();
@@ -405,7 +405,119 @@ class ScanDataProcessorTest {
 
             EntryPointDependencies deps = result.getEntryPointChildren().get("publishEvent");
             assertNotNull(deps);
-            assertTrue(deps.getTopics().isEmpty());
+            // Unresolved topic should appear with the placeholder name
+            assertTrue(deps.getTopics().contains(ScanDataProcessor.UNKNOWN_TOPIC_PLACEHOLDER));
+        }
+
+        @Test
+        @DisplayName("Should process UNKNOWN_COMPLEX topic with placeholder")
+        void processUnknownComplexTopic() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("publishEvent", "gov.service.IService.publishEvent(...)");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            Map<String, String> implMappings = new HashMap<>();
+            implMappings.put("gov.service.IService.publishEvent(...)", "gov.service.impl.ServiceImpl.publishEvent(...)");
+            projectInfo.setMethodImplementationMappings(implMappings);
+
+            EventPublisherInvocation complexInvocation = new EventPublisherInvocation(
+                    "ServiceImpl.java:100",
+                    new MethodReference("gov.service.impl.ServiceImpl.publishEvent(...)", MethodAccessModifier.PUBLIC),
+                    "complexExpression",
+                    TopicResolution.UNKNOWN_COMPLEX
+            );
+            complexInvocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.publishEvent(...)", MethodAccessModifier.PUBLIC)
+            ));
+
+            projectInfo.setEventPublisherInvocations(List.of(complexInvocation));
+
+            ScanData result = processor.process(projectInfo);
+
+            EntryPointDependencies deps = result.getEntryPointChildren().get("publishEvent");
+            assertNotNull(deps);
+            // Unresolved topic should appear with the placeholder name
+            assertTrue(deps.getTopics().contains(ScanDataProcessor.UNKNOWN_TOPIC_PLACEHOLDER));
+        }
+
+        @Test
+        @DisplayName("Should add unresolved topic to publicMethodDependencies")
+        void unresolvedTopicInPublicMethodDeps() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("publishEvent", "gov.service.IService.publishEvent(...)");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            Map<String, String> implMappings = new HashMap<>();
+            implMappings.put("gov.service.IService.publishEvent(...)", "gov.service.impl.ServiceImpl.publishEvent(...)");
+            projectInfo.setMethodImplementationMappings(implMappings);
+
+            EventPublisherInvocation unresolvedInvocation = new EventPublisherInvocation(
+                    "ServiceImpl.java:100",
+                    new MethodReference("gov.service.impl.ServiceImpl.publishEvent(...)", MethodAccessModifier.PUBLIC),
+                    "dynamicTopic",
+                    TopicResolution.UNKNOWN_VARIABLE
+            );
+            unresolvedInvocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.publishEvent(...)", MethodAccessModifier.PUBLIC)
+            ));
+
+            projectInfo.setEventPublisherInvocations(List.of(unresolvedInvocation));
+
+            ScanData result = processor.process(projectInfo);
+
+            Map<String, EntryPointDependencies> publicDeps = result.getPublicMethodDependencies();
+            assertTrue(publicDeps.containsKey("gov.service.impl.ServiceImpl.publishEvent(...)"));
+            assertTrue(publicDeps.get("gov.service.impl.ServiceImpl.publishEvent(...)").getTopics()
+                    .contains(ScanDataProcessor.UNKNOWN_TOPIC_PLACEHOLDER));
+        }
+
+        @Test
+        @DisplayName("Should process both resolved and unresolved topics together")
+        void mixedResolvedAndUnresolvedTopics() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("publishEvent", "gov.service.IService.publishEvent(...)");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            Map<String, String> implMappings = new HashMap<>();
+            implMappings.put("gov.service.IService.publishEvent(...)", "gov.service.impl.ServiceImpl.publishEvent(...)");
+            projectInfo.setMethodImplementationMappings(implMappings);
+
+            EventPublisherInvocation resolvedInvocation = new EventPublisherInvocation(
+                    "ServiceImpl.java:50",
+                    new MethodReference("gov.service.impl.ServiceImpl.publishEvent(...)", MethodAccessModifier.PUBLIC),
+                    "PaymentPosting",
+                    TopicResolution.RESOLVED
+            );
+            resolvedInvocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.publishEvent(...)", MethodAccessModifier.PUBLIC)
+            ));
+
+            EventPublisherInvocation unresolvedInvocation = new EventPublisherInvocation(
+                    "ServiceImpl.java:100",
+                    new MethodReference("gov.service.impl.ServiceImpl.publishEvent(...)", MethodAccessModifier.PUBLIC),
+                    "dynamicTopic",
+                    TopicResolution.UNKNOWN_VARIABLE
+            );
+            unresolvedInvocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.publishEvent(...)", MethodAccessModifier.PUBLIC)
+            ));
+
+            projectInfo.setEventPublisherInvocations(List.of(resolvedInvocation, unresolvedInvocation));
+
+            ScanData result = processor.process(projectInfo);
+
+            EntryPointDependencies deps = result.getEntryPointChildren().get("publishEvent");
+            assertNotNull(deps);
+            // Both the resolved topic and the placeholder should be present
+            assertTrue(deps.getTopics().contains("PaymentPosting"));
+            assertTrue(deps.getTopics().contains(ScanDataProcessor.UNKNOWN_TOPIC_PLACEHOLDER));
+            assertEquals(2, deps.getTopics().size());
         }
 
         @Test
