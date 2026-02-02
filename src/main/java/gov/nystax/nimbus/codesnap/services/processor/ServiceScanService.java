@@ -2,14 +2,19 @@ package gov.nystax.nimbus.codesnap.services.processor;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import gov.nystax.nimbus.codesnap.services.processor.dao.FailedServiceScanDAO;
 import gov.nystax.nimbus.codesnap.services.processor.dao.ServiceScanDAO;
 import gov.nystax.nimbus.codesnap.services.processor.dao.ServiceScanDAO.ServiceCommitPair;
+import gov.nystax.nimbus.codesnap.services.processor.domain.FailedServiceScanRecord;
 import gov.nystax.nimbus.codesnap.services.processor.domain.ScanData;
 import gov.nystax.nimbus.codesnap.services.processor.domain.ServiceScanRecord;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.ProjectInfo;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -17,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -25,6 +31,7 @@ import java.util.logging.Logger;
  * Provides high-level operations for:
  * <ul>
  *   <li>Processing and storing new service scans</li>
+ *   <li>Recording and retrieving failed scans</li>
  *   <li>Retrieving scans for build-time tree construction</li>
  *   <li>Topological sorting of services by dependencies</li>
  * </ul>
@@ -35,11 +42,13 @@ public class ServiceScanService {
 
     private final ServiceScanRecordFactory recordFactory;
     private final ServiceScanDAO serviceScanDAO;
+    private final FailedServiceScanDAO failedServiceScanDAO;
     private final ObjectMapper objectMapper;
 
     public ServiceScanService() {
         this.recordFactory = new ServiceScanRecordFactory();
         this.serviceScanDAO = new ServiceScanDAO();
+        this.failedServiceScanDAO = new FailedServiceScanDAO();
         this.objectMapper = new ObjectMapper();
     }
 
@@ -48,9 +57,11 @@ public class ServiceScanService {
      */
     public ServiceScanService(ServiceScanRecordFactory recordFactory,
                                ServiceScanDAO serviceScanDAO,
+                               FailedServiceScanDAO failedServiceScanDAO,
                                ObjectMapper objectMapper) {
         this.recordFactory = recordFactory;
         this.serviceScanDAO = serviceScanDAO;
+        this.failedServiceScanDAO = failedServiceScanDAO;
         this.objectMapper = objectMapper;
     }
 
@@ -82,11 +93,148 @@ public class ServiceScanService {
                     connection, projectInfo.getArtifactId(), gitCommitHash);
         }
 
+        // Clear any previous failure record for this service/commit since scan is now successful
+        if (failedServiceScanDAO.existsByServiceAndCommit(
+                connection, projectInfo.getArtifactId(), gitCommitHash)) {
+            LOGGER.log(Level.INFO, "Clearing previous failure record for {0}@{1}",
+                    new Object[]{projectInfo.getArtifactId(), gitCommitHash});
+            failedServiceScanDAO.deleteByServiceAndCommit(
+                    connection, projectInfo.getArtifactId(), gitCommitHash);
+        }
+
         // Create and store the new record
         ServiceScanRecord record = recordFactory.createRecord(projectInfo, gitCommitHash);
         serviceScanDAO.insert(connection, record);
 
         return record;
+    }
+
+    /**
+     * Records a failed scan attempt in the database.
+     * If a failure record already exists for the service/commit pair, it will be replaced.
+     * Also clears any successful scan record for this service/commit pair.
+     *
+     * @param connection the database connection (transaction managed by caller)
+     * @param serviceId the service artifact ID
+     * @param gitCommitHash the git commit hash of the scanned code
+     * @param groupId the Maven group ID (may be null)
+     * @param version the Maven version (may be null)
+     * @param errorType the type of error (use constants from FailedServiceScanRecord.ErrorType)
+     * @param errorMessage brief error message
+     * @param exception the exception that caused the failure (may be null)
+     * @return the created FailedServiceScanRecord
+     * @throws SQLException if a database error occurs
+     */
+    public FailedServiceScanRecord recordFailure(Connection connection,
+                                                  String serviceId,
+                                                  String gitCommitHash,
+                                                  String groupId,
+                                                  String version,
+                                                  String errorType,
+                                                  String errorMessage,
+                                                  Throwable exception) throws SQLException {
+        LOGGER.log(Level.WARNING, "Recording scan failure for service: {0}, commit: {1}, error: {2}",
+                new Object[]{serviceId, gitCommitHash, errorMessage});
+
+        // Clear any existing successful scan for this service/commit
+        serviceScanDAO.deleteByServiceAndCommit(connection, serviceId, gitCommitHash);
+
+        // Clear any existing failure record
+        if (failedServiceScanDAO.existsByServiceAndCommit(connection, serviceId, gitCommitHash)) {
+            LOGGER.log(Level.INFO, "Failure record already exists for {0}@{1}, replacing",
+                    new Object[]{serviceId, gitCommitHash});
+            failedServiceScanDAO.deleteByServiceAndCommit(connection, serviceId, gitCommitHash);
+        }
+
+        // Create the failure record
+        FailedServiceScanRecord record = FailedServiceScanRecord.builder()
+                .failureId(UUID.randomUUID().toString())
+                .serviceId(serviceId)
+                .gitCommitHash(gitCommitHash)
+                .failureTimestamp(new Timestamp(System.currentTimeMillis()))
+                .groupId(groupId)
+                .version(version)
+                .errorType(errorType != null ? errorType : FailedServiceScanRecord.ErrorType.UNKNOWN)
+                .errorMessage(errorMessage)
+                .stackTrace(exception != null ? getStackTraceString(exception) : null)
+                .build();
+
+        failedServiceScanDAO.insert(connection, record);
+
+        return record;
+    }
+
+    /**
+     * Checks if a scan failure exists for the given service and commit.
+     *
+     * @param connection the database connection
+     * @param serviceId the service artifact ID
+     * @param gitCommitHash the git commit hash
+     * @return true if a failure record exists, false otherwise
+     * @throws SQLException if a database error occurs
+     */
+    public boolean hasFailedScan(Connection connection,
+                                  String serviceId,
+                                  String gitCommitHash) throws SQLException {
+        return failedServiceScanDAO.existsByServiceAndCommit(connection, serviceId, gitCommitHash);
+    }
+
+    /**
+     * Retrieves a failed scan record for the given service and commit.
+     *
+     * @param connection the database connection
+     * @param serviceId the service artifact ID
+     * @param gitCommitHash the git commit hash
+     * @return Optional containing the failure record if found, empty otherwise
+     * @throws SQLException if a database error occurs
+     */
+    public Optional<FailedServiceScanRecord> getFailedScan(Connection connection,
+                                                            String serviceId,
+                                                            String gitCommitHash) throws SQLException {
+        return failedServiceScanDAO.findByServiceAndCommit(connection, serviceId, gitCommitHash);
+    }
+
+    /**
+     * Finds all failed scans from a list of service/commit pairs.
+     * This is used during build time to identify which services cannot be built.
+     *
+     * @param connection the database connection
+     * @param serviceCommits list of service ID and commit hash pairs to check
+     * @return list of failed scan records for services that have failures
+     * @throws SQLException if a database error occurs
+     */
+    public List<FailedServiceScanRecord> findFailedScans(Connection connection,
+                                                          List<ServiceCommitPair> serviceCommits) throws SQLException {
+        LOGGER.log(Level.INFO, "Checking for failed scans among {0} services", serviceCommits.size());
+        return failedServiceScanDAO.findByServiceCommitPairs(connection, serviceCommits);
+    }
+
+    /**
+     * Clears a failure record for a service/commit pair.
+     * This should be called when a scan succeeds after previously failing.
+     *
+     * @param connection the database connection
+     * @param serviceId the service artifact ID
+     * @param gitCommitHash the git commit hash
+     * @return true if a failure record was deleted, false if none existed
+     * @throws SQLException if a database error occurs
+     */
+    public boolean clearFailure(Connection connection,
+                                 String serviceId,
+                                 String gitCommitHash) throws SQLException {
+        LOGGER.log(Level.INFO, "Clearing failure record for service: {0}, commit: {1}",
+                new Object[]{serviceId, gitCommitHash});
+        return failedServiceScanDAO.deleteByServiceAndCommit(connection, serviceId, gitCommitHash);
+    }
+
+    /**
+     * Converts an exception to a stack trace string.
+     */
+    private String getStackTraceString(Throwable exception) {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        exception.printStackTrace(pw);
+        return sw.toString();
     }
 
     /**

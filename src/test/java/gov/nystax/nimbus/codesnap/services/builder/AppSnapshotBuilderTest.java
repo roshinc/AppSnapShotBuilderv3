@@ -3,6 +3,7 @@ package gov.nystax.nimbus.codesnap.services.builder;
 import gov.nystax.nimbus.codesnap.services.builder.domain.AppTemplateNode;
 import gov.nystax.nimbus.codesnap.services.builder.domain.BuildRequest;
 import gov.nystax.nimbus.codesnap.services.builder.domain.BuildResult;
+import gov.nystax.nimbus.codesnap.services.builder.domain.BuildResult.FailedServiceInfo;
 import gov.nystax.nimbus.codesnap.services.builder.domain.ChildReference;
 import gov.nystax.nimbus.codesnap.services.builder.domain.FunctionPoolEntry;
 import gov.nystax.nimbus.codesnap.services.processor.ServiceScanService;
@@ -10,6 +11,7 @@ import gov.nystax.nimbus.codesnap.services.processor.ServiceScanService.ScanData
 import gov.nystax.nimbus.codesnap.services.processor.dao.QueueMappingDAO;
 import gov.nystax.nimbus.codesnap.services.processor.dao.ServiceScanDAO.ServiceCommitPair;
 import gov.nystax.nimbus.codesnap.services.processor.domain.EntryPointDependencies;
+import gov.nystax.nimbus.codesnap.services.processor.domain.FailedServiceScanRecord;
 import gov.nystax.nimbus.codesnap.services.processor.domain.ScanData;
 import gov.nystax.nimbus.codesnap.services.processor.domain.ServiceCallReference;
 import org.junit.jupiter.api.BeforeEach;
@@ -402,13 +404,148 @@ class AppSnapshotBuilderTest {
         }
     }
 
+    @Nested
+    @DisplayName("Failed Scan Handling Tests")
+    class FailedScanHandlingTests {
+
+        @Test
+        @DisplayName("Should mark build as complete when no failed scans")
+        void noFailedScans() throws SQLException {
+            // Setup
+            ScanData scanData = new ScanData();
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("testFunc", "gov.service.IService.testFunc(...)");
+            scanData.setFunctionMappings(functionMappings);
+            scanData.setEntryPointChildren(Map.of("testFunc", new EntryPointDependencies()));
+
+            mockScanService.addScan("SERVICE", "commit1", false, null, scanData);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("test-app");
+            request.addService("SERVICE", "commit1");
+
+            // Execute
+            BuildResult result = builder.build(null, request);
+
+            // Verify
+            assertTrue(result.isComplete());
+            assertFalse(result.hasFailedServices());
+            assertTrue(result.getFailedServices().isEmpty());
+            assertTrue(result.getWarnings().isEmpty());
+        }
+
+        @Test
+        @DisplayName("Should mark build as incomplete when service has failed scan")
+        void buildWithFailedScan() throws SQLException {
+            // Setup - one good service, one failed service
+            ScanData goodScanData = new ScanData();
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("goodFunc", "gov.service.IService.goodFunc(...)");
+            goodScanData.setFunctionMappings(functionMappings);
+            goodScanData.setEntryPointChildren(Map.of("goodFunc", new EntryPointDependencies()));
+
+            mockScanService.addScan("GOOD_SERVICE", "commit1", false, null, goodScanData);
+            mockScanService.addFailedScan("FAILED_SERVICE", "commit2", "SCAN_ERROR", "Failed to scan service");
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("test-app");
+            request.addService("GOOD_SERVICE", "commit1");
+            request.addService("FAILED_SERVICE", "commit2");
+
+            // Execute
+            BuildResult result = builder.build(null, request);
+
+            // Verify
+            assertFalse(result.isComplete());
+            assertTrue(result.hasFailedServices());
+            assertEquals(1, result.getFailedServices().size());
+
+            FailedServiceInfo failedInfo = result.getFailedServices().get(0);
+            assertEquals("FAILED_SERVICE", failedInfo.getServiceId());
+            assertEquals("commit2", failedInfo.getGitCommitHash());
+            assertEquals("SCAN_ERROR", failedInfo.getErrorType());
+            assertEquals("Failed to scan service", failedInfo.getErrorMessage());
+
+            // Warnings should be populated
+            assertEquals(1, result.getWarnings().size());
+            assertTrue(result.getWarnings().get(0).contains("FAILED_SERVICE"));
+
+            // Good service should still be processed
+            assertTrue(result.getFunctionPool().containsKey("goodFunc"));
+        }
+
+        @Test
+        @DisplayName("Should handle all services failing")
+        void allServicesFailed() throws SQLException {
+            // Setup - all services failed
+            mockScanService.addFailedScan("SERVICE1", "commit1", "CODE_VIOLATION", "Compilation error");
+            mockScanService.addFailedScan("SERVICE2", "commit2", "PARSE_ERROR", "Invalid syntax");
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("test-app");
+            request.addService("SERVICE1", "commit1");
+            request.addService("SERVICE2", "commit2");
+
+            // Execute
+            BuildResult result = builder.build(null, request);
+
+            // Verify
+            assertFalse(result.isComplete());
+            assertTrue(result.hasFailedServices());
+            assertEquals(2, result.getFailedServices().size());
+
+            // No functions should be in the pool
+            assertTrue(result.getFunctionPool().isEmpty());
+
+            // Warnings should be populated for both failures
+            assertEquals(2, result.getWarnings().size());
+        }
+
+        @Test
+        @DisplayName("Should include failed service info in result even when other services succeed")
+        void mixedSuccessAndFailure() throws SQLException {
+            // Setup
+            ScanData scanData1 = new ScanData();
+            scanData1.setFunctionMappings(Map.of("func1", "gov.service.IService.func1(...)"));
+            scanData1.setEntryPointChildren(Map.of("func1", new EntryPointDependencies()));
+
+            ScanData scanData2 = new ScanData();
+            scanData2.setFunctionMappings(Map.of("func2", "gov.service.IService.func2(...)"));
+            scanData2.setEntryPointChildren(Map.of("func2", new EntryPointDependencies()));
+
+            mockScanService.addScan("SERVICE1", "commit1", false, null, scanData1);
+            mockScanService.addFailedScan("SERVICE2", "commit2", "PROCESSING_ERROR", "Processing failed");
+            mockScanService.addScan("SERVICE3", "commit3", false, null, scanData2);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("test-app");
+            request.addService("SERVICE1", "commit1");
+            request.addService("SERVICE2", "commit2");
+            request.addService("SERVICE3", "commit3");
+
+            // Execute
+            BuildResult result = builder.build(null, request);
+
+            // Verify
+            assertFalse(result.isComplete());
+            assertEquals(1, result.getFailedServices().size());
+            assertEquals("SERVICE2", result.getFailedServices().get(0).getServiceId());
+
+            // Both successful services should be processed
+            assertEquals(2, result.getFunctionPool().size());
+            assertTrue(result.getFunctionPool().containsKey("func1"));
+            assertTrue(result.getFunctionPool().containsKey("func2"));
+        }
+    }
+
     // Mock implementations for testing
 
     private static class MockServiceScanService extends ServiceScanService {
         private final Map<String, ScanDataWithMetadata> scans = new HashMap<>();
         private final Map<String, String> dependencies = new HashMap<>();
+        private final Map<String, FailedServiceScanRecord> failedScans = new HashMap<>();
 
-        void addScan(String serviceId, String gitCommit, boolean isUiService, 
+        void addScan(String serviceId, String gitCommit, boolean isUiService,
                      String serviceDependencies, ScanData scanData) {
             ScanDataWithMetadata metadata = new ScanDataWithMetadata(
                     serviceId, gitCommit, isUiService, serviceDependencies, scanData);
@@ -416,6 +553,18 @@ class AppSnapshotBuilderTest {
             if (serviceDependencies != null) {
                 dependencies.put(serviceId, serviceDependencies);
             }
+        }
+
+        void addFailedScan(String serviceId, String gitCommit, String errorType, String errorMessage) {
+            FailedServiceScanRecord record = FailedServiceScanRecord.builder()
+                    .failureId("test-failure-" + serviceId)
+                    .serviceId(serviceId)
+                    .gitCommitHash(gitCommit)
+                    .failureTimestamp(new java.sql.Timestamp(System.currentTimeMillis()))
+                    .errorType(errorType)
+                    .errorMessage(errorMessage)
+                    .build();
+            failedScans.put(serviceId + "@" + gitCommit, record);
         }
 
         @Override
@@ -426,6 +575,20 @@ class AppSnapshotBuilderTest {
                 ScanDataWithMetadata scan = scans.get(pair.serviceId());
                 if (scan != null) {
                     result.put(pair.serviceId(), scan);
+                }
+            }
+            return result;
+        }
+
+        @Override
+        public List<FailedServiceScanRecord> findFailedScans(
+                Connection connection, List<ServiceCommitPair> serviceCommits) {
+            List<FailedServiceScanRecord> result = new ArrayList<>();
+            for (ServiceCommitPair pair : serviceCommits) {
+                String key = pair.serviceId() + "@" + pair.gitCommitHash();
+                FailedServiceScanRecord failedRecord = failedScans.get(key);
+                if (failedRecord != null) {
+                    result.add(failedRecord);
                 }
             }
             return result;
