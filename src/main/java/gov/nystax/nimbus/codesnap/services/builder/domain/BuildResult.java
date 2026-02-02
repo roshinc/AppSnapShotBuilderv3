@@ -69,9 +69,23 @@ public class BuildResult {
      *
      * @param functionName the function name
      * @return the function pool entry (existing or new)
+     * @deprecated Use {@link #getOrCreateFunction(String, String)} to include the app name
      */
+    @Deprecated
     public FunctionPoolEntry getOrCreateFunction(String functionName) {
         return functionPool.computeIfAbsent(functionName, k -> new FunctionPoolEntry());
+    }
+
+    /**
+     * Adds a function to the pool with the associated app name.
+     * If the function already exists, returns the existing entry.
+     *
+     * @param functionName the function name
+     * @param appName the name of the app this function belongs to
+     * @return the function pool entry (existing or new)
+     */
+    public FunctionPoolEntry getOrCreateFunction(String functionName, String appName) {
+        return functionPool.computeIfAbsent(functionName, k -> new FunctionPoolEntry(appName));
     }
 
     /**
