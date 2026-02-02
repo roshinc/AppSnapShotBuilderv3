@@ -405,6 +405,139 @@ public class ServiceScanService {
     }
 
     /**
+     * Finds a service scan by service ID and commit hash, checking both successful
+     * scans and failed scans tables.
+     *
+     * <p>The method first checks the SERVICE_SCAN table for successful scans. If not found,
+     * it checks the FAILED_SERVICE_SCAN table. If not found in either, returns NotFound.
+     *
+     * @param connection the database connection
+     * @param serviceId the service artifact ID
+     * @param gitCommitHash the git commit hash
+     * @return a ServiceScanResult indicating where the service was found (or not found)
+     * @throws SQLException if a database error occurs
+     */
+    public ServiceScanResult findByServiceAndCommit(Connection connection,
+                                                     String serviceId,
+                                                     String gitCommitHash) throws SQLException {
+        LOGGER.log(Level.FINE, "Finding service scan for {0}@{1}",
+                new Object[]{serviceId, gitCommitHash});
+
+        // First check for successful scan
+        Optional<ServiceScanRecord> successfulScan = serviceScanDAO.findByServiceAndCommit(
+                connection, serviceId, gitCommitHash);
+
+        if (successfulScan.isPresent()) {
+            LOGGER.log(Level.FINE, "Found successful scan for {0}@{1}",
+                    new Object[]{serviceId, gitCommitHash});
+            return new ServiceScanResult.SuccessfulScan(successfulScan.get());
+        }
+
+        // Check for failed scan
+        Optional<FailedServiceScanRecord> failedScan = failedServiceScanDAO.findByServiceAndCommit(
+                connection, serviceId, gitCommitHash);
+
+        if (failedScan.isPresent()) {
+            LOGGER.log(Level.FINE, "Found failed scan for {0}@{1}",
+                    new Object[]{serviceId, gitCommitHash});
+            return new ServiceScanResult.FailedScan(failedScan.get());
+        }
+
+        LOGGER.log(Level.FINE, "No scan found for {0}@{1}",
+                new Object[]{serviceId, gitCommitHash});
+        return new ServiceScanResult.NotFound(serviceId, gitCommitHash);
+    }
+
+    /**
+     * Result type for findByServiceAndCommit operation.
+     * Uses a sealed interface to represent three possible outcomes:
+     * <ul>
+     *   <li>{@link SuccessfulScan} - the service was found in the SERVICE_SCAN table</li>
+     *   <li>{@link FailedScan} - the service was found in the FAILED_SERVICE_SCAN table</li>
+     *   <li>{@link NotFound} - the service was not found in either table</li>
+     * </ul>
+     *
+     * <p>Example usage with pattern matching:
+     * <pre>{@code
+     * ServiceScanResult result = service.findByServiceAndCommit(conn, "my-service", "abc123");
+     * switch (result) {
+     *     case ServiceScanResult.SuccessfulScan s -> System.out.println("Found successful scan: " + s.record().getScanId());
+     *     case ServiceScanResult.FailedScan f -> System.out.println("Found failed scan: " + f.record().getErrorMessage());
+     *     case ServiceScanResult.NotFound n -> System.out.println("Not found: " + n.serviceId() + "@" + n.gitCommitHash());
+     * }
+     * }</pre>
+     */
+    public sealed interface ServiceScanResult
+            permits ServiceScanResult.SuccessfulScan,
+                    ServiceScanResult.FailedScan,
+                    ServiceScanResult.NotFound {
+
+        /**
+         * Represents a service found in the SERVICE_SCAN table (successful scan).
+         */
+        record SuccessfulScan(ServiceScanRecord record) implements ServiceScanResult {
+            public SuccessfulScan {
+                if (record == null) {
+                    throw new IllegalArgumentException("ServiceScanRecord cannot be null");
+                }
+            }
+        }
+
+        /**
+         * Represents a service found in the FAILED_SERVICE_SCAN table (failed scan).
+         */
+        record FailedScan(FailedServiceScanRecord record) implements ServiceScanResult {
+            public FailedScan {
+                if (record == null) {
+                    throw new IllegalArgumentException("FailedServiceScanRecord cannot be null");
+                }
+            }
+        }
+
+        /**
+         * Represents a service not found in either table.
+         */
+        record NotFound(String serviceId, String gitCommitHash) implements ServiceScanResult {
+            public NotFound {
+                if (serviceId == null || serviceId.isBlank()) {
+                    throw new IllegalArgumentException("Service ID cannot be null or blank");
+                }
+                if (gitCommitHash == null || gitCommitHash.isBlank()) {
+                    throw new IllegalArgumentException("Git commit hash cannot be null or blank");
+                }
+            }
+        }
+
+        /**
+         * Returns true if this result represents a successful scan.
+         */
+        default boolean isSuccessful() {
+            return this instanceof SuccessfulScan;
+        }
+
+        /**
+         * Returns true if this result represents a failed scan.
+         */
+        default boolean isFailed() {
+            return this instanceof FailedScan;
+        }
+
+        /**
+         * Returns true if the service was not found in either table.
+         */
+        default boolean isNotFound() {
+            return this instanceof NotFound;
+        }
+
+        /**
+         * Returns true if the service was found (either successful or failed).
+         */
+        default boolean isFound() {
+            return !isNotFound();
+        }
+    }
+
+    /**
      * Container for scan data with associated metadata.
      */
     public record ScanDataWithMetadata(
