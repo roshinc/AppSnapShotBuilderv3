@@ -4,11 +4,13 @@ import gov.nystax.nimbus.codesnap.services.builder.domain.AppTemplateNode;
 import gov.nystax.nimbus.codesnap.services.builder.domain.BuildRequest;
 import gov.nystax.nimbus.codesnap.services.builder.domain.BuildRequest.ServiceCommitInfo;
 import gov.nystax.nimbus.codesnap.services.builder.domain.BuildResult;
+import gov.nystax.nimbus.codesnap.services.builder.domain.BuildResult.FailedServiceInfo;
 import gov.nystax.nimbus.codesnap.services.builder.domain.FunctionPoolEntry;
 import gov.nystax.nimbus.codesnap.services.processor.ServiceScanService;
 import gov.nystax.nimbus.codesnap.services.processor.ServiceScanService.ScanDataWithMetadata;
 import gov.nystax.nimbus.codesnap.services.processor.dao.ServiceScanDAO.ServiceCommitPair;
 import gov.nystax.nimbus.codesnap.services.processor.domain.EntryPointDependencies;
+import gov.nystax.nimbus.codesnap.services.processor.domain.FailedServiceScanRecord;
 import gov.nystax.nimbus.codesnap.services.processor.domain.ScanData;
 import gov.nystax.nimbus.codesnap.services.processor.domain.ServiceCallReference;
 
@@ -61,6 +63,10 @@ public class AppSnapshotBuilder {
     /**
      * Builds the AppTemplate and FunctionPool for the given request.
      *
+     * <p>If any services have failed scans, the build will still proceed with available
+     * scans but the result will be marked as incomplete with information about the
+     * failed services.</p>
+     *
      * @param connection the database connection
      * @param request the build request containing app name and service commits
      * @return the build result containing AppTemplate and FunctionPool
@@ -76,20 +82,61 @@ public class AppSnapshotBuilder {
         // Clear queue name cache for fresh build
         queueNameResolver.clearCache();
 
-        // Step 1: Load all scans
+        // Step 1: Convert to service commit pairs
         List<ServiceCommitPair> serviceCommitPairs = convertToServiceCommitPairs(request.getServices());
-        Map<String, ScanDataWithMetadata> scansByServiceId = scanService.loadScansForBuild(
-                connection, serviceCommitPairs);
 
-        // Step 2: Topologically sort services
+        // Step 1a: Check for failed scans
+        List<FailedServiceScanRecord> failedScans = scanService.findFailedScans(connection, serviceCommitPairs);
+        Set<String> failedServiceIds = new HashSet<>();
+        List<FailedServiceInfo> failedServiceInfoList = new ArrayList<>();
+
+        if (!failedScans.isEmpty()) {
+            LOGGER.log(Level.WARNING, "Found {0} failed scans among requested services", failedScans.size());
+            for (FailedServiceScanRecord failure : failedScans) {
+                failedServiceIds.add(failure.getServiceId());
+                failedServiceInfoList.add(new FailedServiceInfo(
+                        failure.getServiceId(),
+                        failure.getGitCommitHash(),
+                        failure.getErrorType(),
+                        failure.getErrorMessage()
+                ));
+            }
+        }
+
+        // Step 1b: Filter out failed services from the request
+        List<ServiceCommitPair> validServiceCommitPairs = new ArrayList<>();
+        for (ServiceCommitPair pair : serviceCommitPairs) {
+            if (!failedServiceIds.contains(pair.serviceId())) {
+                validServiceCommitPairs.add(pair);
+            }
+        }
+
+        // Step 2: Load available scans (excluding failed ones)
+        Map<String, ScanDataWithMetadata> scansByServiceId;
+        if (validServiceCommitPairs.isEmpty()) {
+            LOGGER.log(Level.WARNING, "All services have failed scans, cannot build");
+            scansByServiceId = new HashMap<>();
+        } else {
+            scansByServiceId = scanService.loadScansForBuild(connection, validServiceCommitPairs);
+        }
+
+        // Step 3: Topologically sort services
         List<String> sortedServiceIds = scanService.topologicalSort(scansByServiceId);
         LOGGER.log(Level.INFO, "Services sorted by dependencies: {0}", sortedServiceIds);
 
-        // Step 3: Create transitive resolver
+        // Step 4: Create transitive resolver
         TransitiveResolver transitiveResolver = new TransitiveResolver(scansByServiceId, queueNameResolver);
 
-        // Step 4: Build the result
+        // Step 5: Build the result
         BuildResult result = new BuildResult();
+
+        // Add failed services information to the result
+        for (FailedServiceInfo failedInfo : failedServiceInfoList) {
+            result.addFailedService(failedInfo);
+            result.addWarning("Service " + failedInfo.getServiceId() + "@" +
+                    failedInfo.getGitCommitHash() + " has a failed scan: " +
+                    failedInfo.getErrorMessage());
+        }
 
         // Create the app template root
         AppTemplateNode appRoot = AppTemplateNode.app(request.getAppName());
@@ -115,12 +162,23 @@ public class AppSnapshotBuilder {
 
         result.setAppTemplate(appRoot);
 
-        LOGGER.log(Level.INFO, "Build completed for app: {0}. Functions: {1}, UI Services: {2}",
-                new Object[]{
-                        request.getAppName(),
-                        result.getFunctionPool().size(),
-                        countUiServices(appRoot)
-                });
+        if (result.isComplete()) {
+            LOGGER.log(Level.INFO, "Build completed for app: {0}. Functions: {1}, UI Services: {2}",
+                    new Object[]{
+                            request.getAppName(),
+                            result.getFunctionPool().size(),
+                            countUiServices(appRoot)
+                    });
+        } else {
+            LOGGER.log(Level.WARNING, "Build completed with warnings for app: {0}. " +
+                            "Functions: {1}, UI Services: {2}, Failed Services: {3}",
+                    new Object[]{
+                            request.getAppName(),
+                            result.getFunctionPool().size(),
+                            countUiServices(appRoot),
+                            result.getFailedServices().size()
+                    });
+        }
 
         return result;
     }
