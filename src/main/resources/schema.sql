@@ -66,8 +66,80 @@ COMMENT ON COLUMN SERVICE_SCAN.VERSION IS
 COMMENT ON COLUMN SERVICE_SCAN.SERVICE_DEPENDENCIES IS 
     'Comma-separated list of service artifact IDs this service depends on (e.g., "WT0004J,WT0019J")';
 
-COMMENT ON COLUMN SERVICE_SCAN.SCAN_DATA_JSON IS 
+COMMENT ON COLUMN SERVICE_SCAN.SCAN_DATA_JSON IS
     'Pre-processed scan data as JSON (entryPointChildren, publicMethodDependencies, etc.)';
+
+
+-- ============================================================================
+-- TABLE: FAILED_SERVICE_SCAN
+-- Stores information about service scans that failed.
+-- Used to track scan failures so the build process knows which services
+-- cannot be included in the AppSnapshot.
+-- ============================================================================
+
+CREATE TABLE FAILED_SERVICE_SCAN (
+    FAILURE_ID           VARCHAR(36)     NOT NULL,
+    SERVICE_ID           VARCHAR(100)    NOT NULL,
+    GIT_COMMIT_HASH      VARCHAR(64)     NOT NULL,
+    FAILURE_TIMESTAMP    TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    GROUP_ID             VARCHAR(200),
+    VERSION              VARCHAR(50),
+    ERROR_TYPE           VARCHAR(50)     NOT NULL,
+    ERROR_MESSAGE        VARCHAR(1000),
+    STACK_TRACE          CLOB(1M),
+
+    CONSTRAINT PK_FAILED_SERVICE_SCAN
+        PRIMARY KEY (FAILURE_ID),
+
+    CONSTRAINT UQ_FAILED_SERVICE_COMMIT
+        UNIQUE (SERVICE_ID, GIT_COMMIT_HASH),
+
+    CONSTRAINT CHK_ERROR_TYPE
+        CHECK (ERROR_TYPE IN ('SCAN_ERROR', 'PARSE_ERROR', 'CODE_VIOLATION', 'PROCESSING_ERROR', 'UNKNOWN'))
+);
+
+-- Index for the primary lookup pattern: service ID + git commit hash
+CREATE INDEX IDX_FAILED_SCAN_LOOKUP
+    ON FAILED_SERVICE_SCAN (SERVICE_ID, GIT_COMMIT_HASH);
+
+-- Index for listing failures by service
+CREATE INDEX IDX_FAILED_SCAN_SERVICE
+    ON FAILED_SERVICE_SCAN (SERVICE_ID, FAILURE_TIMESTAMP DESC);
+
+-- Index for filtering by error type
+CREATE INDEX IDX_FAILED_SCAN_ERROR_TYPE
+    ON FAILED_SERVICE_SCAN (ERROR_TYPE);
+
+-- Comment on table and columns
+COMMENT ON TABLE FAILED_SERVICE_SCAN IS
+    'Stores information about service scans that failed. Used during build to identify incomplete AppSnapshots.';
+
+COMMENT ON COLUMN FAILED_SERVICE_SCAN.FAILURE_ID IS
+    'UUID primary key for this failure record';
+
+COMMENT ON COLUMN FAILED_SERVICE_SCAN.SERVICE_ID IS
+    'Service artifact ID (e.g., "WTWAGESUMJ", "WT0004J")';
+
+COMMENT ON COLUMN FAILED_SERVICE_SCAN.GIT_COMMIT_HASH IS
+    'Git commit hash of the source code that failed to scan';
+
+COMMENT ON COLUMN FAILED_SERVICE_SCAN.FAILURE_TIMESTAMP IS
+    'Timestamp when the scan failure occurred';
+
+COMMENT ON COLUMN FAILED_SERVICE_SCAN.GROUP_ID IS
+    'Maven group ID (e.g., "gov.nystax.services")';
+
+COMMENT ON COLUMN FAILED_SERVICE_SCAN.VERSION IS
+    'Maven version (e.g., "1.0.0")';
+
+COMMENT ON COLUMN FAILED_SERVICE_SCAN.ERROR_TYPE IS
+    'Type of error: SCAN_ERROR, PARSE_ERROR, CODE_VIOLATION, PROCESSING_ERROR, or UNKNOWN';
+
+COMMENT ON COLUMN FAILED_SERVICE_SCAN.ERROR_MESSAGE IS
+    'Brief error message describing the failure';
+
+COMMENT ON COLUMN FAILED_SERVICE_SCAN.STACK_TRACE IS
+    'Full stack trace for debugging purposes';
 
 
 -- ============================================================================
@@ -126,8 +198,10 @@ INSERT INTO QUEUE_MAPPING (QUEUE_NAME, TARGET_TYPE, TARGET_NAME) VALUES
 
 -- Grant to application role
 -- GRANT SELECT, INSERT, UPDATE, DELETE ON SERVICE_SCAN TO APP_ROLE;
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON FAILED_SERVICE_SCAN TO APP_ROLE;
 -- GRANT SELECT, INSERT, UPDATE, DELETE ON QUEUE_MAPPING TO APP_ROLE;
 
 -- Read-only role for monitoring/reporting
 -- GRANT SELECT ON SERVICE_SCAN TO READONLY_ROLE;
+-- GRANT SELECT ON FAILED_SERVICE_SCAN TO READONLY_ROLE;
 -- GRANT SELECT ON QUEUE_MAPPING TO READONLY_ROLE;
