@@ -145,18 +145,19 @@ public class AppSnapshotBuilder {
         Set<String> addedFunctions = new HashSet<>();
 
         // Process each service in dependency order
+        String appName = request.getAppName();
         for (String serviceId : sortedServiceIds) {
             ScanDataWithMetadata scanMetadata = scansByServiceId.get(serviceId);
             ScanData scanData = scanMetadata.scanData();
 
             if (scanMetadata.isUiService()) {
                 // Process UI service
-                processUiService(connection, serviceId, scanData, appRoot, result, 
-                        transitiveResolver, addedFunctions);
+                processUiService(connection, serviceId, scanData, appRoot, result,
+                        transitiveResolver, addedFunctions, appName);
             } else {
                 // Process regular service
-                processRegularService(connection, serviceId, scanData, appRoot, result, 
-                        transitiveResolver, addedFunctions);
+                processRegularService(connection, serviceId, scanData, appRoot, result,
+                        transitiveResolver, addedFunctions, appName);
             }
         }
 
@@ -192,7 +193,8 @@ public class AppSnapshotBuilder {
                                         AppTemplateNode appRoot,
                                         BuildResult result,
                                         TransitiveResolver transitiveResolver,
-                                        Set<String> addedFunctions) {
+                                        Set<String> addedFunctions,
+                                        String appName) {
         Map<String, String> functionMappings = scanData.getFunctionMappings();
         if (functionMappings == null || functionMappings.isEmpty()) {
             LOGGER.log(Level.FINE, "Service {0} has no function mappings (dependency-only service)", serviceId);
@@ -202,8 +204,8 @@ public class AppSnapshotBuilder {
         Map<String, EntryPointDependencies> entryPointChildren = scanData.getEntryPointChildren();
 
         for (String functionName : functionMappings.keySet()) {
-            // Add to function pool
-            FunctionPoolEntry poolEntry = result.getOrCreateFunction(functionName);
+            // Add to function pool with app name
+            FunctionPoolEntry poolEntry = result.getOrCreateFunction(functionName, appName);
 
             // Get direct dependencies
             EntryPointDependencies deps = entryPointChildren != null ? 
@@ -234,7 +236,8 @@ public class AppSnapshotBuilder {
                                    AppTemplateNode appRoot,
                                    BuildResult result,
                                    TransitiveResolver transitiveResolver,
-                                   Set<String> addedFunctions) {
+                                   Set<String> addedFunctions,
+                                   String appName) {
         Map<String, String> uiMethodMappings = scanData.getUiServiceMethodMappings();
         if (uiMethodMappings == null || uiMethodMappings.isEmpty()) {
             LOGGER.log(Level.FINE, "UI Service {0} has no UI method mappings", serviceId);
@@ -256,8 +259,8 @@ public class AppSnapshotBuilder {
 
             if (deps != null) {
                 // Add direct function refs to the method node
-                addDependenciesToMethodNode(connection, deps, methodNode, result, 
-                        transitiveResolver, addedFunctions);
+                addDependenciesToMethodNode(connection, deps, methodNode, result,
+                        transitiveResolver, addedFunctions, appName);
             }
 
             uiServicesNode.addChild(methodNode);
@@ -324,14 +327,15 @@ public class AppSnapshotBuilder {
                                               AppTemplateNode methodNode,
                                               BuildResult result,
                                               TransitiveResolver transitiveResolver,
-                                              Set<String> addedFunctions) {
+                                              Set<String> addedFunctions,
+                                              String appName) {
         // Add sync function refs
         Set<String> functions = deps.getFunctions();
         if (functions != null) {
             for (String funcName : functions) {
                 methodNode.addFunctionRef(funcName);
                 // Ensure function is in pool (will be populated when processing its owning service)
-                result.getOrCreateFunction(funcName);
+                result.getOrCreateFunction(funcName, appName);
             }
         }
 
@@ -341,7 +345,7 @@ public class AppSnapshotBuilder {
             for (String funcName : asyncFunctions) {
                 String queueName = queueNameResolver.resolveForFunction(connection, funcName);
                 methodNode.addAsyncFunctionRef(funcName, queueName);
-                result.getOrCreateFunction(funcName);
+                result.getOrCreateFunction(funcName, appName);
             }
         }
 
@@ -365,10 +369,10 @@ public class AppSnapshotBuilder {
             for (var child : transitiveCollector.getChildren()) {
                 if (child.isSyncRef()) {
                     methodNode.addFunctionRef(child.getRef());
-                    result.getOrCreateFunction(child.getRef());
+                    result.getOrCreateFunction(child.getRef(), appName);
                 } else if (child.isAsyncRef()) {
                     methodNode.addAsyncFunctionRef(child.getRef(), child.getQueueName());
-                    result.getOrCreateFunction(child.getRef());
+                    result.getOrCreateFunction(child.getRef(), appName);
                 } else if (child.isTopicRef()) {
                     methodNode.addTopicPublishRef(child.getTopicName(), child.getQueueName());
                 }

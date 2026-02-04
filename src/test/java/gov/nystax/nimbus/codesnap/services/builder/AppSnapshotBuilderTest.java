@@ -91,6 +91,12 @@ class AppSnapshotBuilderTest {
             assertEquals(2, result.getFunctionPool().size());
             assertTrue(result.getFunctionPool().containsKey("insertEmployee"));
             assertTrue(result.getFunctionPool().containsKey("getWageCount"));
+
+            // Verify app property is set on function pool entries
+            FunctionPoolEntry insertEmployeeEntry = result.getFunctionPool().get("insertEmployee");
+            FunctionPoolEntry getWageCountEntry = result.getFunctionPool().get("getWageCount");
+            assertEquals("test-app", insertEmployeeEntry.getApp());
+            assertEquals("test-app", getWageCountEntry.getApp());
         }
 
         @Test

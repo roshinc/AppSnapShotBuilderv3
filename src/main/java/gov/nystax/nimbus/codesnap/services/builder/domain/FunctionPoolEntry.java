@@ -9,11 +9,13 @@ import java.util.Objects;
 
 /**
  * Represents a function entry in the FunctionPool.
- * Contains the function's children (other functions, async refs, topic refs).
- * 
+ * Contains the function's children (other functions, async refs, topic refs)
+ * and the app this function belongs to.
+ *
  * <p>JSON output format:</p>
  * <pre>
  * {
+ *   "app": "MyApp",
  *   "children": [
  *     {"ref": "childFunc1"},
  *     {"ref": "asyncFunc", "async": true, "queueName": "QUEUE.NAME"},
@@ -25,11 +27,27 @@ import java.util.Objects;
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class FunctionPoolEntry {
 
+    @JsonProperty("app")
+    private String app;
+
     @JsonProperty("children")
     private List<ChildReference> children;
 
     public FunctionPoolEntry() {
         this.children = new ArrayList<>();
+    }
+
+    public FunctionPoolEntry(String app) {
+        this.app = app;
+        this.children = new ArrayList<>();
+    }
+
+    public String getApp() {
+        return app;
+    }
+
+    public void setApp(String app) {
+        this.app = app;
     }
 
     public void addChild(ChildReference child) {
@@ -91,18 +109,19 @@ public class FunctionPoolEntry {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         FunctionPoolEntry that = (FunctionPoolEntry) o;
-        return Objects.equals(children, that.children);
+        return Objects.equals(app, that.app) && Objects.equals(children, that.children);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(children);
+        return Objects.hash(app, children);
     }
 
     @Override
     public String toString() {
         return "FunctionPoolEntry{" +
-                "children=" + children +
+                "app='" + app + '\'' +
+                ", children=" + children +
                 '}';
     }
 }
