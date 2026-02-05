@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
@@ -215,9 +216,10 @@ public class AppSnapshotBuilder {
             }
 
             // Add function ref to app template (only once)
-            if (!addedFunctions.contains(functionName)) {
+            String lowerFunctionName = functionName.toLowerCase(Locale.ROOT);
+            if (!addedFunctions.contains(lowerFunctionName)) {
                 appRoot.addFunctionRef(functionName);
-                addedFunctions.add(functionName);
+                addedFunctions.add(lowerFunctionName);
             }
         }
 
