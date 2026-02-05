@@ -30,6 +30,9 @@ public class FunctionPoolEntry {
     @JsonProperty("app")
     private String app;
 
+    @JsonProperty("displayName")
+    private String displayName;
+
     @JsonProperty("children")
     private List<ChildReference> children;
 
@@ -42,12 +45,26 @@ public class FunctionPoolEntry {
         this.children = new ArrayList<>();
     }
 
+    public FunctionPoolEntry(String app, String displayName) {
+        this.app = app;
+        this.displayName = displayName;
+        this.children = new ArrayList<>();
+    }
+
     public String getApp() {
         return app;
     }
 
     public void setApp(String app) {
         this.app = app;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
     }
 
     public void addChild(ChildReference child) {
@@ -109,18 +126,19 @@ public class FunctionPoolEntry {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         FunctionPoolEntry that = (FunctionPoolEntry) o;
-        return Objects.equals(app, that.app) && Objects.equals(children, that.children);
+        return Objects.equals(app, that.app) && Objects.equals(displayName, that.displayName) && Objects.equals(children, that.children);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(app, children);
+        return Objects.hash(app, displayName, children);
     }
 
     @Override
     public String toString() {
         return "FunctionPoolEntry{" +
                 "app='" + app + '\'' +
+                ", displayName='" + displayName + '\'' +
                 ", children=" + children +
                 '}';
     }

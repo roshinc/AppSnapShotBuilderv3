@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -73,7 +74,12 @@ public class BuildResult {
      */
     @Deprecated
     public FunctionPoolEntry getOrCreateFunction(String functionName) {
-        return functionPool.computeIfAbsent(functionName, k -> new FunctionPoolEntry());
+        String key = functionName.toLowerCase(Locale.ROOT);
+        return functionPool.computeIfAbsent(key, k -> {
+            FunctionPoolEntry entry = new FunctionPoolEntry();
+            entry.setDisplayName(functionName);
+            return entry;
+        });
     }
 
     /**
@@ -85,14 +91,15 @@ public class BuildResult {
      * @return the function pool entry (existing or new)
      */
     public FunctionPoolEntry getOrCreateFunction(String functionName, String appName) {
-        return functionPool.computeIfAbsent(functionName, k -> new FunctionPoolEntry(appName));
+        String key = functionName.toLowerCase(Locale.ROOT);
+        return functionPool.computeIfAbsent(key, k -> new FunctionPoolEntry(appName, functionName));
     }
 
     /**
      * Checks if the function pool contains a function.
      */
     public boolean hasFunction(String functionName) {
-        return functionPool.containsKey(functionName);
+        return functionPool.containsKey(functionName.toLowerCase(Locale.ROOT));
     }
 
     /**

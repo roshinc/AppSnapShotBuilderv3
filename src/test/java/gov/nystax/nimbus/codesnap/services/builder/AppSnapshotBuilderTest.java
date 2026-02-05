@@ -89,14 +89,16 @@ class AppSnapshotBuilderTest {
 
             // Should have 2 functions in pool
             assertEquals(2, result.getFunctionPool().size());
-            assertTrue(result.getFunctionPool().containsKey("insertEmployee"));
-            assertTrue(result.getFunctionPool().containsKey("getWageCount"));
+            assertTrue(result.getFunctionPool().containsKey("insertemployee"));
+            assertTrue(result.getFunctionPool().containsKey("getwagecount"));
 
-            // Verify app property is set on function pool entries
-            FunctionPoolEntry insertEmployeeEntry = result.getFunctionPool().get("insertEmployee");
-            FunctionPoolEntry getWageCountEntry = result.getFunctionPool().get("getWageCount");
+            // Verify app and displayName properties are set on function pool entries
+            FunctionPoolEntry insertEmployeeEntry = result.getFunctionPool().get("insertemployee");
+            FunctionPoolEntry getWageCountEntry = result.getFunctionPool().get("getwagecount");
             assertEquals("test-app", insertEmployeeEntry.getApp());
             assertEquals("test-app", getWageCountEntry.getApp());
+            assertEquals("insertEmployee", insertEmployeeEntry.getDisplayName());
+            assertEquals("getWageCount", getWageCountEntry.getDisplayName());
         }
 
         @Test
@@ -170,8 +172,9 @@ class AppSnapshotBuilderTest {
             BuildResult result = builder.build(null, request);
 
             // Verify
-            FunctionPoolEntry entry = result.getFunctionPool().get("parentFunc");
+            FunctionPoolEntry entry = result.getFunctionPool().get("parentfunc");
             assertNotNull(entry);
+            assertEquals("parentFunc", entry.getDisplayName());
             assertEquals(2, entry.getChildren().size());
             assertTrue(entry.containsSyncRef("childFunc1"));
             assertTrue(entry.containsSyncRef("childFunc2"));
@@ -205,7 +208,7 @@ class AppSnapshotBuilderTest {
             BuildResult result = builder.build(null, request);
 
             // Verify
-            FunctionPoolEntry entry = result.getFunctionPool().get("parentFunc");
+            FunctionPoolEntry entry = result.getFunctionPool().get("parentfunc");
             assertNotNull(entry);
             assertTrue(entry.containsAsyncRef("asyncFunc"));
 
@@ -245,7 +248,7 @@ class AppSnapshotBuilderTest {
             BuildResult result = builder.build(null, request);
 
             // Verify
-            FunctionPoolEntry entry = result.getFunctionPool().get("publishFunc");
+            FunctionPoolEntry entry = result.getFunctionPool().get("publishfunc");
             assertNotNull(entry);
             assertTrue(entry.containsTopicRef("PaymentPosting"));
 
@@ -305,7 +308,7 @@ class AppSnapshotBuilderTest {
             BuildResult result = builder.build(null, request);
 
             // Verify - funcA should now have externalFunc as a child (resolved transitively)
-            FunctionPoolEntry entryA = result.getFunctionPool().get("funcA");
+            FunctionPoolEntry entryA = result.getFunctionPool().get("funca");
             assertNotNull(entryA);
             assertTrue(entryA.containsSyncRef("externalFunc"),
                     "funcA should have externalFunc as transitive dependency");
@@ -362,7 +365,7 @@ class AppSnapshotBuilderTest {
             BuildResult result = builder.build(null, request);
 
             // Verify - funcA should have leafFunction (resolved through B -> C)
-            FunctionPoolEntry entryA = result.getFunctionPool().get("funcA");
+            FunctionPoolEntry entryA = result.getFunctionPool().get("funca");
             assertNotNull(entryA);
             assertTrue(entryA.containsSyncRef("leafFunction"),
                     "funcA should have leafFunction as multi-level transitive dependency");
@@ -477,7 +480,7 @@ class AppSnapshotBuilderTest {
             assertTrue(result.getWarnings().get(0).contains("FAILED_SERVICE"));
 
             // Good service should still be processed
-            assertTrue(result.getFunctionPool().containsKey("goodFunc"));
+            assertTrue(result.getFunctionPool().containsKey("goodfunc"));
         }
 
         @Test
