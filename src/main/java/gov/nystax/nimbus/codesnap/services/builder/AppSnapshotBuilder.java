@@ -152,8 +152,7 @@ public class AppSnapshotBuilder {
 
             if (scanMetadata.isUiService()) {
                 // Process UI service
-                processUiService(connection, serviceId, scanData, appRoot, result,
-                        transitiveResolver, addedFunctions, appName);
+                processUiService(connection, serviceId, scanData, appRoot, transitiveResolver);
             } else {
                 // Process regular service
                 processRegularService(connection, serviceId, scanData, appRoot, result,
@@ -227,17 +226,13 @@ public class AppSnapshotBuilder {
     }
 
     /**
-     * Processes a UI service: adds UI service container and methods to app template,
-     * and adds any functions called by UI methods to the pool.
+     * Processes a UI service: adds UI service container and methods to app template.
      */
     private void processUiService(Connection connection,
                                    String serviceId,
                                    ScanData scanData,
                                    AppTemplateNode appRoot,
-                                   BuildResult result,
-                                   TransitiveResolver transitiveResolver,
-                                   Set<String> addedFunctions,
-                                   String appName) {
+                                   TransitiveResolver transitiveResolver) {
         Map<String, String> uiMethodMappings = scanData.getUiServiceMethodMappings();
         if (uiMethodMappings == null || uiMethodMappings.isEmpty()) {
             LOGGER.log(Level.FINE, "UI Service {0} has no UI method mappings", serviceId);
@@ -259,8 +254,7 @@ public class AppSnapshotBuilder {
 
             if (deps != null) {
                 // Add direct function refs to the method node
-                addDependenciesToMethodNode(connection, deps, methodNode, result,
-                        transitiveResolver, addedFunctions, appName);
+                addDependenciesToMethodNode(connection, deps, methodNode, transitiveResolver);
             }
 
             uiServicesNode.addChild(methodNode);
@@ -319,23 +313,17 @@ public class AppSnapshotBuilder {
     }
 
     /**
-     * Adds dependencies to a UI service method node.
-     * Also ensures any called functions are in the function pool.
+     * Adds dependencies to a UI service method node as children in the app template tree.
      */
     private void addDependenciesToMethodNode(Connection connection,
                                               EntryPointDependencies deps,
                                               AppTemplateNode methodNode,
-                                              BuildResult result,
-                                              TransitiveResolver transitiveResolver,
-                                              Set<String> addedFunctions,
-                                              String appName) {
+                                              TransitiveResolver transitiveResolver) {
         // Add sync function refs
         Set<String> functions = deps.getFunctions();
         if (functions != null) {
             for (String funcName : functions) {
                 methodNode.addFunctionRef(funcName);
-                // Ensure function is in pool (will be populated when processing its owning service)
-                result.getOrCreateFunction(funcName, appName);
             }
         }
 
@@ -345,7 +333,6 @@ public class AppSnapshotBuilder {
             for (String funcName : asyncFunctions) {
                 String queueName = queueNameResolver.resolveForFunction(connection, funcName);
                 methodNode.addAsyncFunctionRef(funcName, queueName);
-                result.getOrCreateFunction(funcName, appName);
             }
         }
 
@@ -369,10 +356,8 @@ public class AppSnapshotBuilder {
             for (var child : transitiveCollector.getChildren()) {
                 if (child.isSyncRef()) {
                     methodNode.addFunctionRef(child.getRef());
-                    result.getOrCreateFunction(child.getRef(), appName);
                 } else if (child.isAsyncRef()) {
                     methodNode.addAsyncFunctionRef(child.getRef(), child.getQueueName());
-                    result.getOrCreateFunction(child.getRef(), appName);
                 } else if (child.isTopicRef()) {
                     methodNode.addTopicPublishRef(child.getTopicName(), child.getQueueName());
                 }

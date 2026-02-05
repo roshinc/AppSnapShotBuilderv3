@@ -407,6 +407,75 @@ class AppSnapshotBuilderTest {
                     .anyMatch(c -> "helperFunc1".equals(c.getRef())));
             assertTrue(methodNode.getChildren().stream()
                     .anyMatch(c -> "helperFunc2".equals(c.getRef())));
+
+            // UI service should NOT create function pool entries
+            assertTrue(result.getFunctionPool().isEmpty(),
+                    "UI service should not create function pool entries for referenced functions");
+        }
+
+        @Test
+        @DisplayName("Should not create function pool entries from UI service when regular service owns the functions")
+        void uiServiceDoesNotDuplicateFunctionPoolEntries() throws SQLException {
+            // Setup: Regular service owns helperFunc1 and helperFunc2
+            ScanData regularScanData = new ScanData();
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("helperFunc1", "gov.service.IService.helperFunc1(...)");
+            functionMappings.put("helperFunc2", "gov.service.IService.helperFunc2(...)");
+            regularScanData.setFunctionMappings(functionMappings);
+
+            Map<String, EntryPointDependencies> regularEntryPoints = new HashMap<>();
+            regularEntryPoints.put("helperFunc1", new EntryPointDependencies());
+            regularEntryPoints.put("helperFunc2", new EntryPointDependencies());
+            regularScanData.setEntryPointChildren(regularEntryPoints);
+
+            // Setup: UI service method references helperFunc1 and helperFunc2
+            ScanData uiScanData = new ScanData();
+            Map<String, String> uiMethodMappings = new HashMap<>();
+            uiMethodMappings.put("retrieveData", "gov.ui.IUI.retrieveData(...)");
+            uiScanData.setUiServiceMethodMappings(uiMethodMappings);
+
+            EntryPointDependencies uiDeps = new EntryPointDependencies();
+            uiDeps.addFunction("helperFunc1");
+            uiDeps.addFunction("helperFunc2");
+            uiScanData.setEntryPointChildren(Map.of("retrieveData", uiDeps));
+
+            // Add scans: regular service first (no dependency), UI service depends on it
+            mockScanService.addScan("REGULAR_SVC", "r1", false, null, regularScanData);
+            mockScanService.addScan("UI_SVC", "u1", true, "REGULAR_SVC", uiScanData);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("mixed-app");
+            request.addService("REGULAR_SVC", "r1");
+            request.addService("UI_SVC", "u1");
+
+            // Execute
+            BuildResult result = builder.build(null, request);
+
+            // Verify function pool: only 2 entries, created by the regular service
+            assertEquals(2, result.getFunctionPool().size());
+            assertTrue(result.getFunctionPool().containsKey("helperFunc1"));
+            assertTrue(result.getFunctionPool().containsKey("helperFunc2"));
+
+            // Verify app property is set correctly (by the regular service)
+            assertEquals("mixed-app", result.getFunctionPool().get("helperFunc1").getApp());
+            assertEquals("mixed-app", result.getFunctionPool().get("helperFunc2").getApp());
+
+            // Verify UI service method node has function refs as children
+            AppTemplateNode appRoot = result.getAppTemplate();
+            AppTemplateNode uiServicesNode = appRoot.getChildren().stream()
+                    .filter(c -> AppTemplateNode.TYPE_UI_SERVICES.equals(c.getType()))
+                    .findFirst()
+                    .orElse(null);
+            assertNotNull(uiServicesNode);
+            assertEquals("UI_SVC", uiServicesNode.getName());
+
+            AppTemplateNode methodNode = uiServicesNode.getChildren().get(0);
+            assertEquals("retrieveData", methodNode.getName());
+            assertEquals(2, methodNode.getChildren().size());
+            assertTrue(methodNode.getChildren().stream()
+                    .anyMatch(c -> "helperFunc1".equals(c.getRef())));
+            assertTrue(methodNode.getChildren().stream()
+                    .anyMatch(c -> "helperFunc2".equals(c.getRef())));
         }
     }
 
