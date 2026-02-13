@@ -8,7 +8,6 @@ import gov.nystax.nimbus.codesnap.services.builder.domain.ChildReference;
 import gov.nystax.nimbus.codesnap.services.builder.domain.FunctionPoolEntry;
 import gov.nystax.nimbus.codesnap.services.processor.ServiceScanService;
 import gov.nystax.nimbus.codesnap.services.processor.ServiceScanService.ScanDataWithMetadata;
-import gov.nystax.nimbus.codesnap.services.processor.dao.QueueMappingDAO;
 import gov.nystax.nimbus.codesnap.services.processor.dao.ServiceScanDAO.ServiceCommitPair;
 import gov.nystax.nimbus.codesnap.services.processor.domain.EntryPointDependencies;
 import gov.nystax.nimbus.codesnap.services.processor.domain.FailedServiceScanRecord;
@@ -26,7 +25,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -38,15 +36,13 @@ import static org.junit.jupiter.api.Assertions.*;
 class AppSnapshotBuilderTest {
 
     private MockServiceScanService mockScanService;
-    private MockQueueMappingDAO mockQueueMappingDAO;
     private AppSnapshotBuilder builder;
 
     @BeforeEach
     void setUp() {
         mockScanService = new MockServiceScanService();
-        mockQueueMappingDAO = new MockQueueMappingDAO();
-        QueueNameResolver queueNameResolver = new QueueNameResolver(mockQueueMappingDAO);
-        
+        QueueNameResolver queueNameResolver = new QueueNameResolver();
+
         builder = new AppSnapshotBuilder(mockScanService, queueNameResolver);
     }
 
@@ -99,6 +95,8 @@ class AppSnapshotBuilderTest {
             assertEquals("test-app", getWageCountEntry.getApp());
             assertEquals("insertEmployee", insertEmployeeEntry.getDisplayName());
             assertEquals("getWageCount", getWageCountEntry.getDisplayName());
+            assertEquals("insertEmployee_queue", insertEmployeeEntry.getQueueName());
+            assertEquals("getWageCount_queue", getWageCountEntry.getQueueName());
         }
 
         @Test
@@ -183,9 +181,6 @@ class AppSnapshotBuilderTest {
         @Test
         @DisplayName("Should add async function dependencies with queue names")
         void asyncFunctionDependencies() throws SQLException {
-            // Setup queue mapping
-            mockQueueMappingDAO.addMapping("ASYNC.QUEUE", QueueMappingDAO.TARGET_TYPE_FUNCTION, "asyncFunc");
-
             ScanData scanData = new ScanData();
             Map<String, String> functionMappings = new HashMap<>();
             functionMappings.put("parentFunc", "gov.service.IService.parentFunc(...)");
@@ -217,15 +212,12 @@ class AppSnapshotBuilderTest {
                     .findFirst()
                     .orElse(null);
             assertNotNull(asyncRef);
-            assertEquals("ASYNC.QUEUE", asyncRef.getQueueName());
+            assertEquals("asyncFunc_queue", asyncRef.getQueueName());
         }
 
         @Test
         @DisplayName("Should add topic dependencies with queue names")
         void topicDependencies() throws SQLException {
-            // Setup queue mapping
-            mockQueueMappingDAO.addMapping("TOPIC.QUEUE", QueueMappingDAO.TARGET_TYPE_TOPIC, "PaymentPosting");
-
             ScanData scanData = new ScanData();
             Map<String, String> functionMappings = new HashMap<>();
             functionMappings.put("publishFunc", "gov.service.IService.publishFunc(...)");
@@ -257,7 +249,7 @@ class AppSnapshotBuilderTest {
                     .findFirst()
                     .orElse(null);
             assertNotNull(topicRef);
-            assertEquals("TOPIC.QUEUE", topicRef.getQueueName());
+            assertEquals("PaymentPosting_queue", topicRef.getQueueName());
         }
     }
 
@@ -456,12 +448,12 @@ class AppSnapshotBuilderTest {
 
             // Verify function pool: only 2 entries, created by the regular service
             assertEquals(2, result.getFunctionPool().size());
-            assertTrue(result.getFunctionPool().containsKey("helperFunc1"));
-            assertTrue(result.getFunctionPool().containsKey("helperFunc2"));
+            assertTrue(result.getFunctionPool().containsKey("helperfunc1"));
+            assertTrue(result.getFunctionPool().containsKey("helperfunc2"));
 
             // Verify app property is set correctly (by the regular service)
-            assertEquals("mixed-app", result.getFunctionPool().get("helperFunc1").getApp());
-            assertEquals("mixed-app", result.getFunctionPool().get("helperFunc2").getApp());
+            assertEquals("mixed-app", result.getFunctionPool().get("helperfunc1").getApp());
+            assertEquals("mixed-app", result.getFunctionPool().get("helperfunc2").getApp());
 
             // Verify UI service method node has function refs as children
             AppTemplateNode appRoot = result.getAppTemplate();
@@ -693,26 +685,4 @@ class AppSnapshotBuilderTest {
         }
     }
 
-    private static class MockQueueMappingDAO extends QueueMappingDAO {
-        private final Map<String, String> functionQueues = new HashMap<>();
-        private final Map<String, String> topicQueues = new HashMap<>();
-
-        void addMapping(String queueName, String targetType, String targetName) {
-            if (TARGET_TYPE_FUNCTION.equals(targetType)) {
-                functionQueues.put(targetName, queueName);
-            } else if (TARGET_TYPE_TOPIC.equals(targetType)) {
-                topicQueues.put(targetName, queueName);
-            }
-        }
-
-        @Override
-        public Optional<String> findQueueNameForFunction(Connection connection, String functionName) {
-            return Optional.ofNullable(functionQueues.get(functionName));
-        }
-
-        @Override
-        public Optional<String> findQueueNameForTopic(Connection connection, String topicName) {
-            return Optional.ofNullable(topicQueues.get(topicName));
-        }
-    }
 }

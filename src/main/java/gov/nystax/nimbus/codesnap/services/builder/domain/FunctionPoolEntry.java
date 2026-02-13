@@ -16,6 +16,8 @@ import java.util.Objects;
  * <pre>
  * {
  *   "app": "MyApp",
+ *   "displayName": "myFunction",
+ *   "queueName": "MYFUNCTION.QUEUE",
  *   "children": [
  *     {"ref": "childFunc1"},
  *     {"ref": "asyncFunc", "async": true, "queueName": "QUEUE.NAME"},
@@ -32,6 +34,9 @@ public class FunctionPoolEntry {
 
     @JsonProperty("displayName")
     private String displayName;
+
+    @JsonProperty("queueName")
+    private String queueName;
 
     @JsonProperty("children")
     private List<ChildReference> children;
@@ -65,6 +70,14 @@ public class FunctionPoolEntry {
 
     public void setDisplayName(String displayName) {
         this.displayName = displayName;
+    }
+
+    public String getQueueName() {
+        return queueName;
+    }
+
+    public void setQueueName(String queueName) {
+        this.queueName = queueName;
     }
 
     public void addChild(ChildReference child) {
@@ -126,12 +139,15 @@ public class FunctionPoolEntry {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         FunctionPoolEntry that = (FunctionPoolEntry) o;
-        return Objects.equals(app, that.app) && Objects.equals(displayName, that.displayName) && Objects.equals(children, that.children);
+        return Objects.equals(app, that.app) &&
+                Objects.equals(displayName, that.displayName) &&
+                Objects.equals(queueName, that.queueName) &&
+                Objects.equals(children, that.children);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(app, displayName, children);
+        return Objects.hash(app, displayName, queueName, children);
     }
 
     @Override
@@ -139,6 +155,7 @@ public class FunctionPoolEntry {
         return "FunctionPoolEntry{" +
                 "app='" + app + '\'' +
                 ", displayName='" + displayName + '\'' +
+                ", queueName='" + queueName + '\'' +
                 ", children=" + children +
                 '}';
     }

@@ -206,6 +206,10 @@ public class AppSnapshotBuilder {
         for (String functionName : functionMappings.keySet()) {
             // Add to function pool with app name
             FunctionPoolEntry poolEntry = result.getOrCreateFunction(functionName, appName);
+            if (poolEntry.getQueueName() == null || poolEntry.getQueueName().isBlank()) {
+                String queueName = queueNameResolver.resolveForFunction(connection, functionName);
+                poolEntry.setQueueName(queueName);
+            }
 
             // Get direct dependencies
             EntryPointDependencies deps = entryPointChildren != null ? 
