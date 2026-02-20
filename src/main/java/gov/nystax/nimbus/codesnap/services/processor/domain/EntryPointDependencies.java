@@ -41,6 +41,12 @@ public class EntryPointDependencies {
     @JsonProperty("serviceCalls")
     private List<ServiceCallReference> serviceCalls;
 
+    /**
+     * Whether this entry point (directly or transitively) invokes the legacy gateway HTTP client.
+     */
+    @JsonProperty("usesLegacyGatewayHttpClient")
+    private boolean usesLegacyGatewayHttpClient;
+
     public EntryPointDependencies() {
         this.functions = new LinkedHashSet<>();
         this.asyncFunctions = new LinkedHashSet<>();
@@ -60,6 +66,7 @@ public class EntryPointDependencies {
         for (ServiceCallReference call : this.serviceCalls) {
             copy.serviceCalls.add(call.copy());
         }
+        copy.usesLegacyGatewayHttpClient = this.usesLegacyGatewayHttpClient;
         return copy;
     }
 
@@ -74,7 +81,8 @@ public class EntryPointDependencies {
         this.functions.addAll(other.functions);
         this.asyncFunctions.addAll(other.asyncFunctions);
         this.topics.addAll(other.topics);
-        
+        this.usesLegacyGatewayHttpClient |= other.usesLegacyGatewayHttpClient;
+
         // For service calls, avoid duplicates based on serviceId + interfaceMethod
         for (ServiceCallReference otherCall : other.serviceCalls) {
             boolean exists = this.serviceCalls.stream()
@@ -90,10 +98,11 @@ public class EntryPointDependencies {
      * Checks if this dependency set is empty (has no dependencies).
      */
     public boolean isEmpty() {
-        return functions.isEmpty() && 
-               asyncFunctions.isEmpty() && 
-               topics.isEmpty() && 
-               serviceCalls.isEmpty();
+        return functions.isEmpty() &&
+               asyncFunctions.isEmpty() &&
+               topics.isEmpty() &&
+               serviceCalls.isEmpty() &&
+               !usesLegacyGatewayHttpClient;
     }
 
     public void addFunction(String functionName) {
@@ -151,12 +160,21 @@ public class EntryPointDependencies {
         this.serviceCalls = serviceCalls == null ? new ArrayList<>() : new ArrayList<>(serviceCalls);
     }
 
+    public boolean isUsesLegacyGatewayHttpClient() {
+        return usesLegacyGatewayHttpClient;
+    }
+
+    public void setUsesLegacyGatewayHttpClient(boolean usesLegacyGatewayHttpClient) {
+        this.usesLegacyGatewayHttpClient = usesLegacyGatewayHttpClient;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         EntryPointDependencies that = (EntryPointDependencies) o;
-        return Objects.equals(functions, that.functions) &&
+        return usesLegacyGatewayHttpClient == that.usesLegacyGatewayHttpClient &&
+                Objects.equals(functions, that.functions) &&
                 Objects.equals(asyncFunctions, that.asyncFunctions) &&
                 Objects.equals(topics, that.topics) &&
                 Objects.equals(serviceCalls, that.serviceCalls);
@@ -164,7 +182,7 @@ public class EntryPointDependencies {
 
     @Override
     public int hashCode() {
-        return Objects.hash(functions, asyncFunctions, topics, serviceCalls);
+        return Objects.hash(functions, asyncFunctions, topics, serviceCalls, usesLegacyGatewayHttpClient);
     }
 
     @Override
@@ -174,6 +192,7 @@ public class EntryPointDependencies {
                 ", asyncFunctions=" + asyncFunctions +
                 ", topics=" + topics +
                 ", serviceCalls=" + serviceCalls +
+                ", usesLegacyGatewayHttpClient=" + usesLegacyGatewayHttpClient +
                 '}';
     }
 }

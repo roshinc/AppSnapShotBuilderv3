@@ -5,6 +5,7 @@ import gov.nystax.nimbus.codesnap.services.processor.domain.ScanData;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.EventPublisherInvocation;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.FunctionInvocation;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.FunctionUsage;
+import gov.nystax.nimbus.codesnap.services.scanner.domain.LegacyGatewayHttpClientInvocation;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.MethodReference;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.ProjectInfo;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.ServiceInvocation;
@@ -74,6 +75,7 @@ public class ScanDataProcessor {
         processFunctionUsages(projectInfo, scanData, implToInterface, interfaceToEntryPoint);
         processServiceUsages(projectInfo, scanData, implToInterface, interfaceToEntryPoint);
         processEventPublisherInvocations(projectInfo, scanData, implToInterface, interfaceToEntryPoint);
+        processLegacyGatewayHttpClientInvocations(projectInfo, scanData, implToInterface, interfaceToEntryPoint);
 
         LOGGER.log(Level.INFO, "Completed processing scan data for service: {0}. " +
                         "Entry points: {1}, Public methods with deps: {2}",
@@ -364,6 +366,58 @@ public class ScanDataProcessor {
                     EntryPointDependencies methodDeps = publicMethodDeps.computeIfAbsent(
                             implMethod, k -> new EntryPointDependencies());
                     methodDeps.addTopic(topic);
+                }
+            }
+        }
+
+        scanData.setEntryPointChildren(entryPointChildren);
+        scanData.setPublicMethodDependencies(publicMethodDeps);
+    }
+
+    /**
+     * Processes legacy gateway HTTP client invocations and updates both entryPointChildren
+     * and publicMethodDependencies with the usesLegacyGatewayHttpClient flag.
+     */
+    private void processLegacyGatewayHttpClientInvocations(ProjectInfo projectInfo,
+                                                            ScanData scanData,
+                                                            Map<String, String> implToInterface,
+                                                            Map<String, String> interfaceToEntryPoint) {
+        List<LegacyGatewayHttpClientInvocation> invocations = projectInfo.getLegacyGatewayHttpClientInvocations();
+        if (invocations == null) {
+            return;
+        }
+
+        Map<String, EntryPointDependencies> entryPointChildren = scanData.getEntryPointChildren();
+        Map<String, EntryPointDependencies> publicMethodDeps = scanData.getPublicMethodDependencies();
+        if (publicMethodDeps == null) {
+            publicMethodDeps = new HashMap<>();
+        }
+
+        for (LegacyGatewayHttpClientInvocation invocation : invocations) {
+            List<MethodReference> callChain = invocation.getCallChain();
+
+            if (callChain == null || callChain.isEmpty()) {
+                LOGGER.log(Level.WARNING, "Legacy gateway HTTP client invocation has empty call chain at {0}",
+                        invocation.getInvocationSite());
+                continue;
+            }
+
+            // Find owners and set the flag on entryPointChildren
+            Set<String> owners = findOwners(callChain, implToInterface, interfaceToEntryPoint);
+            for (String owner : owners) {
+                EntryPointDependencies deps = entryPointChildren.get(owner);
+                if (deps != null) {
+                    deps.setUsesLegacyGatewayHttpClient(true);
+                }
+            }
+
+            // Set the flag on publicMethodDependencies for all PUBLIC methods in call chain
+            for (MethodReference methodRef : callChain) {
+                if (isPublicMethod(methodRef)) {
+                    String implMethod = methodRef.getMethodName();
+                    EntryPointDependencies methodDeps = publicMethodDeps.computeIfAbsent(
+                            implMethod, k -> new EntryPointDependencies());
+                    methodDeps.setUsesLegacyGatewayHttpClient(true);
                 }
             }
         }

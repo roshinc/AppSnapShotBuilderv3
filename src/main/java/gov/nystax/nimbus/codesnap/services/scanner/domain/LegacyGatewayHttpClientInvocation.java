@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Represents a single invocation of an event publisher and its call chain.
+ * Represents a single invocation of a legacy gateway HTTP client and its call chain.
  */
 public class LegacyGatewayHttpClientInvocation implements UsageInvocation {
 
@@ -76,7 +76,7 @@ public class LegacyGatewayHttpClientInvocation implements UsageInvocation {
 
     @Override
     public String toString() {
-        return "EventPublisherInvocation{" +
+        return "LegacyGatewayHttpClientInvocation{" +
                 "invocationSite='" + invocationSite + '\'' +
                 ", enclosingMethod=" + enclosingMethod +
                 ", callChain=" + callChain +

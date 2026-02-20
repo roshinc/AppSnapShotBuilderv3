@@ -181,6 +181,11 @@ public class TransitiveResolver {
             }
         }
 
+        // Propagate legacy gateway HTTP client flag
+        if (deps.isUsesLegacyGatewayHttpClient()) {
+            targetEntry.setUsesLegacyGatewayHttpClient(true);
+        }
+
         // Recursively resolve nested service calls
         List<ServiceCallReference> serviceCalls = deps.getServiceCalls();
         if (serviceCalls != null) {

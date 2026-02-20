@@ -38,6 +38,10 @@ public class FunctionPoolEntry {
     @JsonProperty("queueName")
     private String queueName;
 
+    @JsonProperty("usesLegacyGatewayHttpClient")
+    @JsonInclude(JsonInclude.Include.NON_DEFAULT)
+    private boolean usesLegacyGatewayHttpClient;
+
     @JsonProperty("children")
     private List<ChildReference> children;
 
@@ -78,6 +82,14 @@ public class FunctionPoolEntry {
 
     public void setQueueName(String queueName) {
         this.queueName = queueName;
+    }
+
+    public boolean isUsesLegacyGatewayHttpClient() {
+        return usesLegacyGatewayHttpClient;
+    }
+
+    public void setUsesLegacyGatewayHttpClient(boolean usesLegacyGatewayHttpClient) {
+        this.usesLegacyGatewayHttpClient = usesLegacyGatewayHttpClient;
     }
 
     public void addChild(ChildReference child) {
@@ -139,7 +151,8 @@ public class FunctionPoolEntry {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         FunctionPoolEntry that = (FunctionPoolEntry) o;
-        return Objects.equals(app, that.app) &&
+        return usesLegacyGatewayHttpClient == that.usesLegacyGatewayHttpClient &&
+                Objects.equals(app, that.app) &&
                 Objects.equals(displayName, that.displayName) &&
                 Objects.equals(queueName, that.queueName) &&
                 Objects.equals(children, that.children);
@@ -147,7 +160,7 @@ public class FunctionPoolEntry {
 
     @Override
     public int hashCode() {
-        return Objects.hash(app, displayName, queueName, children);
+        return Objects.hash(app, displayName, queueName, usesLegacyGatewayHttpClient, children);
     }
 
     @Override
@@ -156,6 +169,7 @@ public class FunctionPoolEntry {
                 "app='" + app + '\'' +
                 ", displayName='" + displayName + '\'' +
                 ", queueName='" + queueName + '\'' +
+                ", usesLegacyGatewayHttpClient=" + usesLegacyGatewayHttpClient +
                 ", children=" + children +
                 '}';
     }

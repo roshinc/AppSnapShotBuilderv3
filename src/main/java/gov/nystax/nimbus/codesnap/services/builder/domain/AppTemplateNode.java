@@ -51,6 +51,9 @@ public class AppTemplateNode {
     @JsonProperty("topicPublish")
     private Boolean topicPublish;
 
+    @JsonProperty("usesLegacyGatewayHttpClient")
+    private Boolean usesLegacyGatewayHttpClient;
+
     @JsonProperty("children")
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     private List<AppTemplateNode> children;
@@ -199,6 +202,14 @@ public class AppTemplateNode {
         this.topicPublish = topicPublish;
     }
 
+    public Boolean getUsesLegacyGatewayHttpClient() {
+        return usesLegacyGatewayHttpClient;
+    }
+
+    public void setUsesLegacyGatewayHttpClient(Boolean usesLegacyGatewayHttpClient) {
+        this.usesLegacyGatewayHttpClient = usesLegacyGatewayHttpClient;
+    }
+
     public List<AppTemplateNode> getChildren() {
         return children == null ? null : new ArrayList<>(children);
     }
@@ -223,12 +234,14 @@ public class AppTemplateNode {
                 Objects.equals(queueName, that.queueName) &&
                 Objects.equals(topicName, that.topicName) &&
                 Objects.equals(topicPublish, that.topicPublish) &&
+                Objects.equals(usesLegacyGatewayHttpClient, that.usesLegacyGatewayHttpClient) &&
                 Objects.equals(children, that.children);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, type, ref, async, queueName, topicName, topicPublish, children);
+        return Objects.hash(name, type, ref, async, queueName, topicName, topicPublish,
+                usesLegacyGatewayHttpClient, children);
     }
 
     @Override

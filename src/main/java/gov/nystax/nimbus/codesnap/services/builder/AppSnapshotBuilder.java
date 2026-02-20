@@ -311,6 +311,11 @@ public class AppSnapshotBuilder {
             }
         }
 
+        // Propagate legacy gateway HTTP client flag
+        if (deps.isUsesLegacyGatewayHttpClient()) {
+            poolEntry.setUsesLegacyGatewayHttpClient(true);
+        }
+
         // Resolve service calls transitively
         List<ServiceCallReference> serviceCalls = deps.getServiceCalls();
         if (serviceCalls != null && !serviceCalls.isEmpty()) {
@@ -351,6 +356,11 @@ public class AppSnapshotBuilder {
             }
         }
 
+        // Propagate legacy gateway HTTP client flag from direct dependencies
+        if (deps.isUsesLegacyGatewayHttpClient()) {
+            methodNode.setUsesLegacyGatewayHttpClient(true);
+        }
+
         // Resolve service calls transitively and add to method node
         List<ServiceCallReference> serviceCalls = deps.getServiceCalls();
         if (serviceCalls != null && !serviceCalls.isEmpty()) {
@@ -367,6 +377,11 @@ public class AppSnapshotBuilder {
                 } else if (child.isTopicRef()) {
                     methodNode.addTopicPublishRef(child.getTopicName(), child.getQueueName());
                 }
+            }
+
+            // Propagate legacy gateway HTTP client flag from transitive dependencies
+            if (transitiveCollector.isUsesLegacyGatewayHttpClient()) {
+                methodNode.setUsesLegacyGatewayHttpClient(true);
             }
         }
     }

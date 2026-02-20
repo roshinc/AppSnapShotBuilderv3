@@ -5,6 +5,7 @@ import gov.nystax.nimbus.codesnap.services.processor.domain.ScanData;
 import gov.nystax.nimbus.codesnap.services.processor.domain.ServiceCallReference;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.EventPublisherInvocation;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.FunctionInvocation;
+import gov.nystax.nimbus.codesnap.services.scanner.domain.LegacyGatewayHttpClientInvocation;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.FunctionUsage;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.MethodReference;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.MethodReference.MethodAccessModifier;
@@ -658,6 +659,223 @@ class ScanDataProcessorTest {
 
             assertNotNull(result);
             assertTrue(result.getEntryPointChildren().get("func1").isEmpty());
+        }
+    }
+
+    @Nested
+    @DisplayName("Legacy Gateway HTTP Client Tests")
+    class LegacyGatewayHttpClientTests {
+
+        @Test
+        @DisplayName("Should set usesLegacyGatewayHttpClient flag on owning entry point")
+        void basicOwnership() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("processPayment", "gov.service.IService.processPayment(...)");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            Map<String, String> implMappings = new HashMap<>();
+            implMappings.put("gov.service.IService.processPayment(...)", "gov.service.impl.ServiceImpl.processPayment(...)");
+            projectInfo.setMethodImplementationMappings(implMappings);
+
+            LegacyGatewayHttpClientInvocation invocation = new LegacyGatewayHttpClientInvocation(
+                    "ServiceImpl.java:200",
+                    new MethodReference("gov.service.impl.ServiceImpl.processPayment(...)", MethodAccessModifier.PUBLIC)
+            );
+            invocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.processPayment(...)", MethodAccessModifier.PUBLIC)
+            ));
+
+            projectInfo.setLegacyGatewayHttpClientInvocations(List.of(invocation));
+
+            ScanData result = processor.process(projectInfo);
+
+            EntryPointDependencies deps = result.getEntryPointChildren().get("processPayment");
+            assertNotNull(deps);
+            assertTrue(deps.isUsesLegacyGatewayHttpClient());
+        }
+
+        @Test
+        @DisplayName("Should set flag on multiple owners when call chain has multiple entry points")
+        void multipleOwners() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("entry1", "gov.service.IService.entry1(...)");
+            functionMappings.put("entry2", "gov.service.IService.entry2(...)");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            Map<String, String> implMappings = new HashMap<>();
+            implMappings.put("gov.service.IService.entry1(...)", "gov.service.impl.ServiceImpl.entry1(...)");
+            implMappings.put("gov.service.IService.entry2(...)", "gov.service.impl.ServiceImpl.entry2(...)");
+            projectInfo.setMethodImplementationMappings(implMappings);
+
+            LegacyGatewayHttpClientInvocation invocation = new LegacyGatewayHttpClientInvocation(
+                    "ServiceImpl.java:300",
+                    new MethodReference("gov.service.impl.ServiceImpl.helper(...)", MethodAccessModifier.PRIVATE)
+            );
+            invocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.entry1(...)", MethodAccessModifier.PUBLIC),
+                    new MethodReference("gov.service.impl.ServiceImpl.helper(...)", MethodAccessModifier.PRIVATE),
+                    new MethodReference("gov.service.impl.ServiceImpl.entry2(...)", MethodAccessModifier.PUBLIC)
+            ));
+
+            projectInfo.setLegacyGatewayHttpClientInvocations(List.of(invocation));
+
+            ScanData result = processor.process(projectInfo);
+
+            assertTrue(result.getEntryPointChildren().get("entry1").isUsesLegacyGatewayHttpClient());
+            assertTrue(result.getEntryPointChildren().get("entry2").isUsesLegacyGatewayHttpClient());
+        }
+
+        @Test
+        @DisplayName("Should set flag in publicMethodDependencies for public methods in call chain")
+        void publicMethodDependencies() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("entryPoint", "gov.service.IService.entryPoint(...)");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            Map<String, String> implMappings = new HashMap<>();
+            implMappings.put("gov.service.IService.entryPoint(...)", "gov.service.impl.ServiceImpl.entryPoint(...)");
+            projectInfo.setMethodImplementationMappings(implMappings);
+
+            LegacyGatewayHttpClientInvocation invocation = new LegacyGatewayHttpClientInvocation(
+                    "ServiceImpl.java:100",
+                    new MethodReference("gov.service.impl.ServiceImpl.entryPoint(...)", MethodAccessModifier.PUBLIC)
+            );
+            invocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.entryPoint(...)", MethodAccessModifier.PUBLIC)
+            ));
+
+            projectInfo.setLegacyGatewayHttpClientInvocations(List.of(invocation));
+
+            ScanData result = processor.process(projectInfo);
+
+            Map<String, EntryPointDependencies> publicDeps = result.getPublicMethodDependencies();
+            assertTrue(publicDeps.containsKey("gov.service.impl.ServiceImpl.entryPoint(...)"));
+            assertTrue(publicDeps.get("gov.service.impl.ServiceImpl.entryPoint(...)").isUsesLegacyGatewayHttpClient());
+        }
+
+        @Test
+        @DisplayName("Should not include private methods in publicMethodDependencies")
+        void privateMethodsExcluded() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("entryPoint", "gov.service.IService.entryPoint(...)");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            Map<String, String> implMappings = new HashMap<>();
+            implMappings.put("gov.service.IService.entryPoint(...)", "gov.service.impl.ServiceImpl.entryPoint(...)");
+            projectInfo.setMethodImplementationMappings(implMappings);
+
+            LegacyGatewayHttpClientInvocation invocation = new LegacyGatewayHttpClientInvocation(
+                    "ServiceImpl.java:100",
+                    new MethodReference("gov.service.impl.ServiceImpl.privateHelper(...)", MethodAccessModifier.PRIVATE)
+            );
+            invocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.entryPoint(...)", MethodAccessModifier.PUBLIC),
+                    new MethodReference("gov.service.impl.ServiceImpl.privateHelper(...)", MethodAccessModifier.PRIVATE)
+            ));
+
+            projectInfo.setLegacyGatewayHttpClientInvocations(List.of(invocation));
+
+            ScanData result = processor.process(projectInfo);
+
+            Map<String, EntryPointDependencies> publicDeps = result.getPublicMethodDependencies();
+            assertTrue(publicDeps.containsKey("gov.service.impl.ServiceImpl.entryPoint(...)"));
+            assertFalse(publicDeps.containsKey("gov.service.impl.ServiceImpl.privateHelper(...)"));
+        }
+
+        @Test
+        @DisplayName("Should handle empty call chain gracefully")
+        void emptyCallChain() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("func1", "interface.method1()");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            LegacyGatewayHttpClientInvocation invocation = new LegacyGatewayHttpClientInvocation(
+                    "ServiceImpl.java:100",
+                    new MethodReference("gov.service.impl.ServiceImpl.method(...)", MethodAccessModifier.PUBLIC)
+            );
+            invocation.setCallChain(new ArrayList<>());
+
+            projectInfo.setLegacyGatewayHttpClientInvocations(List.of(invocation));
+
+            ScanData result = processor.process(projectInfo);
+
+            assertNotNull(result);
+            assertFalse(result.getEntryPointChildren().get("func1").isUsesLegacyGatewayHttpClient());
+        }
+
+        @Test
+        @DisplayName("Should handle null invocations gracefully")
+        void nullInvocations() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("func1", "interface.method1()");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            projectInfo.setLegacyGatewayHttpClientInvocations(null);
+
+            ScanData result = processor.process(projectInfo);
+
+            assertNotNull(result);
+            assertFalse(result.getEntryPointChildren().get("func1").isUsesLegacyGatewayHttpClient());
+        }
+
+        @Test
+        @DisplayName("Should coexist with other dependency types")
+        void mixedWithOtherDependencies() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("entryPoint", "gov.service.IService.entryPoint(...)");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            Map<String, String> implMappings = new HashMap<>();
+            implMappings.put("gov.service.IService.entryPoint(...)", "gov.service.impl.ServiceImpl.entryPoint(...)");
+            projectInfo.setMethodImplementationMappings(implMappings);
+
+            // Add a function usage (sync)
+            FunctionUsage usage = new FunctionUsage("externalFunc", "gov.func.externalFunc", "dep");
+            FunctionInvocation funcInvocation = new FunctionInvocation(
+                    "ServiceImpl.java:50",
+                    new MethodReference("gov.service.impl.ServiceImpl.entryPoint(...)", MethodAccessModifier.PUBLIC),
+                    "execute"
+            );
+            funcInvocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.entryPoint(...)", MethodAccessModifier.PUBLIC)
+            ));
+            usage.setInvocations(List.of(funcInvocation));
+            projectInfo.setFunctionUsages(List.of(usage));
+
+            // Add a legacy gateway HTTP client invocation
+            LegacyGatewayHttpClientInvocation httpInvocation = new LegacyGatewayHttpClientInvocation(
+                    "ServiceImpl.java:100",
+                    new MethodReference("gov.service.impl.ServiceImpl.entryPoint(...)", MethodAccessModifier.PUBLIC)
+            );
+            httpInvocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.entryPoint(...)", MethodAccessModifier.PUBLIC)
+            ));
+            projectInfo.setLegacyGatewayHttpClientInvocations(List.of(httpInvocation));
+
+            ScanData result = processor.process(projectInfo);
+
+            EntryPointDependencies deps = result.getEntryPointChildren().get("entryPoint");
+            assertNotNull(deps);
+            // Has function dependency
+            assertTrue(deps.getFunctions().contains("externalFunc"));
+            // And the legacy gateway flag
+            assertTrue(deps.isUsesLegacyGatewayHttpClient());
+            // Not empty
+            assertFalse(deps.isEmpty());
         }
     }
 

@@ -608,6 +608,152 @@ class AppSnapshotBuilderTest {
         }
     }
 
+    @Nested
+    @DisplayName("Legacy Gateway HTTP Client Tests")
+    class LegacyGatewayHttpClientTests {
+
+        @Test
+        @DisplayName("Should set usesLegacyGatewayHttpClient flag on function pool entry from direct dependency")
+        void directDependencyFlag() throws SQLException {
+            ScanData scanData = new ScanData();
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("processPayment", "gov.service.IService.processPayment(...)");
+            scanData.setFunctionMappings(functionMappings);
+
+            EntryPointDependencies deps = new EntryPointDependencies();
+            deps.setUsesLegacyGatewayHttpClient(true);
+
+            Map<String, EntryPointDependencies> entryPointChildren = new HashMap<>();
+            entryPointChildren.put("processPayment", deps);
+            scanData.setEntryPointChildren(entryPointChildren);
+
+            mockScanService.addScan("SERVICE", "commit1", false, null, scanData);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("test-app");
+            request.addService("SERVICE", "commit1");
+
+            BuildResult result = builder.build(null, request);
+
+            FunctionPoolEntry entry = result.getFunctionPool().get("processpayment");
+            assertNotNull(entry);
+            assertTrue(entry.isUsesLegacyGatewayHttpClient());
+        }
+
+        @Test
+        @DisplayName("Should not set flag when not used")
+        void noFlagWhenNotUsed() throws SQLException {
+            ScanData scanData = new ScanData();
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("simpleFunc", "gov.service.IService.simpleFunc(...)");
+            scanData.setFunctionMappings(functionMappings);
+
+            EntryPointDependencies deps = new EntryPointDependencies();
+            deps.addFunction("childFunc");
+
+            Map<String, EntryPointDependencies> entryPointChildren = new HashMap<>();
+            entryPointChildren.put("simpleFunc", deps);
+            scanData.setEntryPointChildren(entryPointChildren);
+
+            mockScanService.addScan("SERVICE", "commit1", false, null, scanData);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("test-app");
+            request.addService("SERVICE", "commit1");
+
+            BuildResult result = builder.build(null, request);
+
+            FunctionPoolEntry entry = result.getFunctionPool().get("simplefunc");
+            assertNotNull(entry);
+            assertFalse(entry.isUsesLegacyGatewayHttpClient());
+        }
+
+        @Test
+        @DisplayName("Should propagate flag transitively through service calls")
+        void transitiveResolution() throws SQLException {
+            // Service A calls Service B, and Service B uses legacy gateway HTTP client
+            ScanData scanDataA = new ScanData();
+            Map<String, String> functionMappingsA = new HashMap<>();
+            functionMappingsA.put("funcA", "gov.a.IA.funcA(...)");
+            scanDataA.setFunctionMappings(functionMappingsA);
+
+            EntryPointDependencies depsA = new EntryPointDependencies();
+            depsA.addServiceCall("SERVICE_B", "gov.b.IB.funcB(...)");
+            scanDataA.setEntryPointChildren(Map.of("funcA", depsA));
+
+            ScanData scanDataB = new ScanData();
+            scanDataB.setFunctionMappings(new HashMap<>());
+            scanDataB.setMethodImplementationMapping(Map.of(
+                    "gov.b.IB.funcB(...)", "gov.b.impl.BImpl.funcB(...)"));
+
+            EntryPointDependencies publicDepsB = new EntryPointDependencies();
+            publicDepsB.setUsesLegacyGatewayHttpClient(true);
+            scanDataB.setPublicMethodDependencies(Map.of(
+                    "gov.b.impl.BImpl.funcB(...)", publicDepsB));
+
+            mockScanService.addScan("SERVICE_A", "a1", false, "SERVICE_B", scanDataA);
+            mockScanService.addScan("SERVICE_B", "b1", false, null, scanDataB);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("transitive-app");
+            request.addService("SERVICE_A", "a1");
+            request.addService("SERVICE_B", "b1");
+
+            BuildResult result = builder.build(null, request);
+
+            FunctionPoolEntry entryA = result.getFunctionPool().get("funca");
+            assertNotNull(entryA);
+            assertTrue(entryA.isUsesLegacyGatewayHttpClient(),
+                    "Flag should propagate transitively from Service B to Service A");
+        }
+
+        @Test
+        @DisplayName("Should propagate flag through multi-level transitive chains")
+        void multiLevelTransitive() throws SQLException {
+            // A -> B -> C (C uses legacy gateway)
+            ScanData scanDataA = new ScanData();
+            scanDataA.setFunctionMappings(Map.of("funcA", "gov.a.IA.funcA(...)"));
+            EntryPointDependencies depsA = new EntryPointDependencies();
+            depsA.addServiceCall("SERVICE_B", "gov.b.IB.funcB(...)");
+            scanDataA.setEntryPointChildren(Map.of("funcA", depsA));
+
+            ScanData scanDataB = new ScanData();
+            scanDataB.setFunctionMappings(new HashMap<>());
+            scanDataB.setMethodImplementationMapping(Map.of(
+                    "gov.b.IB.funcB(...)", "gov.b.impl.BImpl.funcB(...)"));
+            EntryPointDependencies publicDepsB = new EntryPointDependencies();
+            publicDepsB.addServiceCall("SERVICE_C", "gov.c.IC.funcC(...)");
+            scanDataB.setPublicMethodDependencies(Map.of(
+                    "gov.b.impl.BImpl.funcB(...)", publicDepsB));
+
+            ScanData scanDataC = new ScanData();
+            scanDataC.setFunctionMappings(new HashMap<>());
+            scanDataC.setMethodImplementationMapping(Map.of(
+                    "gov.c.IC.funcC(...)", "gov.c.impl.CImpl.funcC(...)"));
+            EntryPointDependencies publicDepsC = new EntryPointDependencies();
+            publicDepsC.setUsesLegacyGatewayHttpClient(true);
+            scanDataC.setPublicMethodDependencies(Map.of(
+                    "gov.c.impl.CImpl.funcC(...)", publicDepsC));
+
+            mockScanService.addScan("SERVICE_A", "a1", false, "SERVICE_B", scanDataA);
+            mockScanService.addScan("SERVICE_B", "b1", false, "SERVICE_C", scanDataB);
+            mockScanService.addScan("SERVICE_C", "c1", false, null, scanDataC);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("multi-level-app");
+            request.addService("SERVICE_A", "a1");
+            request.addService("SERVICE_B", "b1");
+            request.addService("SERVICE_C", "c1");
+
+            BuildResult result = builder.build(null, request);
+
+            FunctionPoolEntry entryA = result.getFunctionPool().get("funca");
+            assertNotNull(entryA);
+            assertTrue(entryA.isUsesLegacyGatewayHttpClient(),
+                    "Flag should propagate through A -> B -> C chain");
+        }
+    }
+
     // Mock implementations for testing
 
     private static class MockServiceScanService extends ServiceScanService {
