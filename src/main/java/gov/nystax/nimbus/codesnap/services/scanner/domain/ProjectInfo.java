@@ -55,6 +55,9 @@ public class ProjectInfo {
     @JsonProperty("eventPublisherInvocations")
     private List<EventPublisherInvocation> eventPublisherInvocations;
 
+    @JsonProperty("legacyGatewayHttpClientInvocations")
+    private List<LegacyGatewayHttpClientInvocation> legacyGatewayHttpClientInvocations;
+
     public ProjectInfo() {
     }
 
@@ -225,6 +228,14 @@ public class ProjectInfo {
         this.eventPublisherInvocations = eventPublisherInvocations == null ? null : new ArrayList<>(eventPublisherInvocations);
     }
 
+    public List<LegacyGatewayHttpClientInvocation> getLegacyGatewayHttpClientInvocations() {
+        return legacyGatewayHttpClientInvocations == null ? null : new ArrayList<>(legacyGatewayHttpClientInvocations);
+    }
+
+    public void setLegacyGatewayHttpClientInvocations(List<LegacyGatewayHttpClientInvocation> legacyGatewayHttpClientInvocations) {
+        this.legacyGatewayHttpClientInvocations = legacyGatewayHttpClientInvocations == null ? null : new ArrayList<>(legacyGatewayHttpClientInvocations);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -249,7 +260,8 @@ public class ProjectInfo {
                 Objects.equals(functionDependencies, that.functionDependencies) &&
                 Objects.equals(functionUsages, that.functionUsages) &&
                 Objects.equals(serviceUsages, that.serviceUsages) &&
-                Objects.equals(eventPublisherInvocations, that.eventPublisherInvocations);
+                Objects.equals(eventPublisherInvocations, that.eventPublisherInvocations) &&
+                Objects.equals(legacyGatewayHttpClientInvocations, that.legacyGatewayHttpClientInvocations);
     }
 
     @Override
@@ -259,7 +271,7 @@ public class ProjectInfo {
                 serviceInterface, serviceImplementation, isUIService, functionMappings, uiServiceMethodMappings,
                 methodImplementationMappings,
                 serviceDependencies, functionDependencies, functionUsages, serviceUsages,
-                eventPublisherInvocations);
+                eventPublisherInvocations, legacyGatewayHttpClientInvocations);
     }
 
     @Override
@@ -283,6 +295,7 @@ public class ProjectInfo {
                 ", functionUsages=" + functionUsages +
                 ", serviceUsages=" + serviceUsages +
                 ", eventPublisherUsages=" + eventPublisherInvocations +
+                ", legacyGatewayHttpClientUsages=" + legacyGatewayHttpClientInvocations +
                 '}';
     }
 }
