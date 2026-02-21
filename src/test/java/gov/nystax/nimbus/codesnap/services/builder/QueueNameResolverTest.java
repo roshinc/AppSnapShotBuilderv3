@@ -28,7 +28,7 @@ class QueueNameResolverTest {
     @Test
     void resolveForFunction_usesEndpointAndCache() {
         ScriptedHttpClient httpClient = new ScriptedHttpClient(List.of(
-                new ScriptedHttpClient.ScriptedResponseData(200, "{\"QUEUE.NAME\":\"FUNC.Q\"}")
+                new ScriptedHttpClient.ScriptedResponseData(200, "{\"async_url\":\"OCP.DEV.FUNC.Q\"}")
         ));
 
         QueueNameResolver resolver = new QueueNameResolver(
@@ -38,18 +38,19 @@ class QueueNameResolverTest {
         );
 
         String first = resolver.resolveForFunction(null, "myFunc");
-        String second = resolver.resolveForFunction(null, "myFunc");
+        String second = resolver.resolveForFunction(null, "MYFUNC");
 
         assertEquals("FUNC.Q", first);
         assertEquals("FUNC.Q", second);
         assertEquals(1, httpClient.getCallCount(), "Expected cached second lookup");
-        assertTrue(httpClient.getRequestedUris().get(0).toString().contains("functionName=myFunc"));
+        assertTrue(httpClient.getRequestedUris().get(0).toString().endsWith("/function-queue/myfunc"));
+        assertEquals("POST", httpClient.getRequestedMethods().get(0));
     }
 
     @Test
     void resolveForTopic_usesTopicEndpoint() {
         ScriptedHttpClient httpClient = new ScriptedHttpClient(List.of(
-                new ScriptedHttpClient.ScriptedResponseData(200, "{\"QUEUE.NAME\":\"TOPIC.Q\"}")
+                new ScriptedHttpClient.ScriptedResponseData(200, "{\"MQ_QUEUE\":\"OCP.DEV.TOPIC.Q\"}")
         ));
 
         QueueNameResolver resolver = new QueueNameResolver(
@@ -62,7 +63,8 @@ class QueueNameResolverTest {
 
         assertEquals("TOPIC.Q", queueName);
         assertEquals(1, httpClient.getCallCount());
-        assertTrue(httpClient.getRequestedUris().get(0).toString().contains("topicName=PaymentPosting"));
+        assertTrue(httpClient.getRequestedUris().get(0).toString().endsWith("/topic-queue/paymentposting"));
+        assertEquals("GET", httpClient.getRequestedMethods().get(0));
     }
 
     @Test
@@ -70,7 +72,7 @@ class QueueNameResolverTest {
         ScriptedHttpClient httpClient = new ScriptedHttpClient(List.of(
                 new ScriptedHttpClient.ScriptedResponseData(500, "{\"error\":\"temporary\"}"),
                 new ScriptedHttpClient.ScriptedResponseData(503, "{\"error\":\"temporary\"}"),
-                new ScriptedHttpClient.ScriptedResponseData(200, "{\"QUEUE.NAME\":\"RETRY.Q\"}")
+                new ScriptedHttpClient.ScriptedResponseData(200, "{\"async_url\":\"RETRY.Q\"}")
         ));
 
         QueueNameResolver resolver = new QueueNameResolver(
@@ -108,11 +110,13 @@ class QueueNameResolverTest {
         private final List<ScriptedResponseData> scriptedResponses;
         private final AtomicInteger callCounter;
         private final List<URI> requestedUris;
+        private final List<String> requestedMethods;
 
         private ScriptedHttpClient(List<ScriptedResponseData> scriptedResponses) {
             this.scriptedResponses = new ArrayList<>(scriptedResponses);
             this.callCounter = new AtomicInteger(0);
             this.requestedUris = new ArrayList<>();
+            this.requestedMethods = new ArrayList<>();
         }
 
         int getCallCount() {
@@ -121,6 +125,10 @@ class QueueNameResolverTest {
 
         List<URI> getRequestedUris() {
             return requestedUris;
+        }
+
+        List<String> getRequestedMethods() {
+            return requestedMethods;
         }
 
         @Override
@@ -178,6 +186,7 @@ class QueueNameResolverTest {
         public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) throws IOException {
             int index = callCounter.getAndIncrement();
             requestedUris.add(request.uri());
+            requestedMethods.add(request.method());
 
             if (scriptedResponses.isEmpty()) {
                 throw new IOException("No scripted responses configured");

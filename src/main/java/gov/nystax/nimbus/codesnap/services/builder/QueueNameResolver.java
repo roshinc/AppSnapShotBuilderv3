@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -34,9 +35,9 @@ public class QueueNameResolver {
     private static final String FUNCTION_ENDPOINT_ENV_VAR = "CODESNAP_QUEUE_FUNCTION_RESOLVER_URL";
     private static final String TOPIC_ENDPOINT_SYSTEM_PROPERTY = "codesnap.queue.topic.resolver.url";
     private static final String TOPIC_ENDPOINT_ENV_VAR = "CODESNAP_QUEUE_TOPIC_RESOLVER_URL";
-    private static final String FUNCTION_PARAM_NAME = "functionName";
-    private static final String TOPIC_PARAM_NAME = "topicName";
-    private static final String QUEUE_NAME_KEY = "QUEUE.NAME";
+    private static final String FUNCTION_QUEUE_NAME_KEY = "async_url";
+    private static final String TOPIC_QUEUE_NAME_KEY = "MQ_QUEUE";
+    private static final String QUEUE_PREFIX_TO_REMOVE = "OCP.DEV.";
     private static final int MAX_ENDPOINT_ATTEMPTS = 3;
     private static final long INITIAL_BACKOFF_MS = 200L;
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(2);
@@ -72,15 +73,20 @@ public class QueueNameResolver {
      * @return resolved queue name, or generated default when unresolved
      */
     public String resolveForFunction(Connection connection, String functionName) {
-        if (functionQueueCache.containsKey(functionName)) {
-            return functionQueueCache.get(functionName);
+        String cacheKey = normalizeCacheKey(functionName);
+        if (functionQueueCache.containsKey(cacheKey)) {
+            return functionQueueCache.get(cacheKey);
         }
 
         String queueName = resolveFromEndpointWithRetry(
-                functionResolverEndpoint, FUNCTION_PARAM_NAME, functionName, "function")
+                functionResolverEndpoint,
+                functionName,
+                "function",
+                FUNCTION_QUEUE_NAME_KEY,
+                HttpMethod.POST)
                 .orElseGet(() -> generateDefaultQueueName(functionName));
 
-        functionQueueCache.put(functionName, queueName);
+        functionQueueCache.put(cacheKey, queueName);
         return queueName;
     }
 
@@ -92,15 +98,20 @@ public class QueueNameResolver {
      * @return resolved queue name, or generated default when unresolved
      */
     public String resolveForTopic(Connection connection, String topicName) {
-        if (topicQueueCache.containsKey(topicName)) {
-            return topicQueueCache.get(topicName);
+        String cacheKey = normalizeCacheKey(topicName);
+        if (topicQueueCache.containsKey(cacheKey)) {
+            return topicQueueCache.get(cacheKey);
         }
 
         String queueName = resolveFromEndpointWithRetry(
-                topicResolverEndpoint, TOPIC_PARAM_NAME, topicName, "topic")
+                topicResolverEndpoint,
+                topicName,
+                "topic",
+                TOPIC_QUEUE_NAME_KEY,
+                HttpMethod.GET)
                 .orElseGet(() -> generateDefaultQueueName(topicName));
 
-        topicQueueCache.put(topicName, queueName);
+        topicQueueCache.put(cacheKey, queueName);
         return queueName;
     }
 
@@ -111,15 +122,11 @@ public class QueueNameResolver {
                                 Iterable<String> functionNames,
                                 Iterable<String> topicNames) {
         for (String functionName : functionNames) {
-            if (!functionQueueCache.containsKey(functionName)) {
-                resolveForFunction(connection, functionName);
-            }
+            resolveForFunction(connection, functionName);
         }
 
         for (String topicName : topicNames) {
-            if (!topicQueueCache.containsKey(topicName)) {
-                resolveForTopic(connection, topicName);
-            }
+            resolveForTopic(connection, topicName);
         }
     }
 
@@ -132,9 +139,10 @@ public class QueueNameResolver {
     }
 
     private Optional<String> resolveFromEndpointWithRetry(URI endpoint,
-                                                          String queryParamName,
                                                           String targetName,
-                                                          String targetType) {
+                                                          String targetType,
+                                                          String queueNameKey,
+                                                          HttpMethod httpMethod) {
         if (endpoint == null) {
             LOGGER.log(Level.FINE,
                     "No {0} queue resolver endpoint configured for target {1}",
@@ -143,7 +151,8 @@ public class QueueNameResolver {
         }
 
         for (int attempt = 1; attempt <= MAX_ENDPOINT_ATTEMPTS; attempt++) {
-            EndpointLookupResult result = callResolverEndpoint(endpoint, queryParamName, targetName, targetType);
+            EndpointLookupResult result = callResolverEndpoint(
+                    endpoint, targetName, targetType, queueNameKey, httpMethod);
             if (result.queueName() != null) {
                 return Optional.of(result.queueName());
             }
@@ -161,27 +170,34 @@ public class QueueNameResolver {
     }
 
     private EndpointLookupResult callResolverEndpoint(URI endpoint,
-                                                      String queryParamName,
                                                       String targetName,
-                                                      String targetType) {
+                                                      String targetType,
+                                                      String queueNameKey,
+                                                      HttpMethod httpMethod) {
         try {
-            URI requestUri = buildRequestUri(endpoint, queryParamName, targetName);
-            HttpRequest request = HttpRequest.newBuilder(requestUri)
-                    .GET()
-                    .timeout(HTTP_TIMEOUT)
-                    .build();
+            URI requestUri = buildRequestUri(endpoint, targetName);
+            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(requestUri)
+                    .timeout(HTTP_TIMEOUT);
+
+            if (httpMethod == HttpMethod.POST) {
+                requestBuilder.POST(HttpRequest.BodyPublishers.noBody());
+            } else {
+                requestBuilder.GET();
+            }
+
+            HttpRequest request = requestBuilder.build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             int statusCode = response.statusCode();
 
             if (statusCode >= 200 && statusCode < 300) {
-                Optional<String> queueName = parseQueueName(response.body());
+                Optional<String> queueName = parseQueueName(response.body(), queueNameKey);
                 if (queueName.isPresent()) {
-                    return EndpointLookupResult.success(queueName.get());
+                    return EndpointLookupResult.success(normalizeResolvedQueueName(queueName.get()));
                 }
                 LOGGER.log(Level.WARNING,
                         "Queue resolver response missing key {0} for {1} {2}",
-                        new Object[]{QUEUE_NAME_KEY, targetType, targetName});
+                        new Object[]{queueNameKey, targetType, targetName});
                 return EndpointLookupResult.nonRetryableFailure();
             }
 
@@ -212,29 +228,34 @@ public class QueueNameResolver {
         }
     }
 
-    private URI buildRequestUri(URI baseEndpoint, String paramName, String paramValue) throws URISyntaxException {
-        String encodedValue = URLEncoder.encode(paramValue, StandardCharsets.UTF_8);
-        String queryParam = paramName + "=" + encodedValue;
-        String existingQuery = baseEndpoint.getQuery();
-        String mergedQuery = (existingQuery == null || existingQuery.isBlank())
-                ? queryParam
-                : existingQuery + "&" + queryParam;
+    private URI buildRequestUri(URI baseEndpoint, String targetName) throws URISyntaxException {
+        String normalizedTarget = normalizeCacheKey(targetName);
+        String encodedTarget = URLEncoder.encode(normalizedTarget, StandardCharsets.UTF_8).replace("+", "%20");
+
+        String basePath = baseEndpoint.getPath();
+        if (basePath == null) {
+            basePath = "";
+        }
+        String normalizedBasePath = basePath.endsWith("/")
+                ? basePath.substring(0, basePath.length() - 1)
+                : basePath;
+        String requestPath = normalizedBasePath + "/" + encodedTarget;
 
         return new URI(baseEndpoint.getScheme(),
                 baseEndpoint.getAuthority(),
-                baseEndpoint.getPath(),
-                mergedQuery,
+                requestPath,
+                baseEndpoint.getQuery(),
                 baseEndpoint.getFragment());
     }
 
-    private Optional<String> parseQueueName(String responseBody) {
+    private Optional<String> parseQueueName(String responseBody, String queueNameKey) {
         if (responseBody == null || responseBody.isBlank()) {
             return Optional.empty();
         }
 
         try {
             JsonNode jsonNode = objectMapper.readTree(responseBody);
-            JsonNode queueNode = jsonNode.get(QUEUE_NAME_KEY);
+            JsonNode queueNode = jsonNode.get(queueNameKey);
             if (queueNode == null || queueNode.isNull()) {
                 return Optional.empty();
             }
@@ -292,6 +313,21 @@ public class QueueNameResolver {
         return targetName + DEFAULT_QUEUE_SUFFIX;
     }
 
+    private String normalizeResolvedQueueName(String queueName) {
+        String normalizedQueueName = queueName.trim();
+        if (normalizedQueueName.regionMatches(true, 0, QUEUE_PREFIX_TO_REMOVE, 0, QUEUE_PREFIX_TO_REMOVE.length())) {
+            return normalizedQueueName.substring(QUEUE_PREFIX_TO_REMOVE.length());
+        }
+        return normalizedQueueName;
+    }
+
+    private String normalizeCacheKey(String targetName) {
+        if (targetName == null) {
+            return "";
+        }
+        return targetName.toLowerCase(Locale.ROOT);
+    }
+
     private record EndpointLookupResult(String queueName, boolean retryable) {
         private static EndpointLookupResult success(String queueName) {
             return new EndpointLookupResult(queueName, false);
@@ -304,5 +340,10 @@ public class QueueNameResolver {
         private static EndpointLookupResult nonRetryableFailure() {
             return new EndpointLookupResult(null, false);
         }
+    }
+
+    private enum HttpMethod {
+        GET,
+        POST
     }
 }
