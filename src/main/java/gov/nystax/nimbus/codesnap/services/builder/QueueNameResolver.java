@@ -2,6 +2,8 @@ package gov.nystax.nimbus.codesnap.services.builder;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
 
 import java.io.IOException;
 import java.net.URI;
@@ -30,17 +32,14 @@ public class QueueNameResolver {
 
     private static final Logger LOGGER = Logger.getLogger(QueueNameResolver.class.getName());
 
-    private static final String DEFAULT_QUEUE_SUFFIX = "_queue";
-    private static final String FUNCTION_ENDPOINT_SYSTEM_PROPERTY = "codesnap.queue.function.resolver.url";
-    private static final String FUNCTION_ENDPOINT_ENV_VAR = "CODESNAP_QUEUE_FUNCTION_RESOLVER_URL";
-    private static final String TOPIC_ENDPOINT_SYSTEM_PROPERTY = "codesnap.queue.topic.resolver.url";
-    private static final String TOPIC_ENDPOINT_ENV_VAR = "CODESNAP_QUEUE_TOPIC_RESOLVER_URL";
     private static final String FUNCTION_QUEUE_NAME_KEY = "async_url";
     private static final String TOPIC_QUEUE_NAME_KEY = "MQ_QUEUE";
-    private static final String QUEUE_PREFIX_TO_REMOVE = "OCP.DEV.";
-    private static final int MAX_ENDPOINT_ATTEMPTS = 3;
-    private static final long INITIAL_BACKOFF_MS = 200L;
-    private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(2);
+
+    private final String defaultQueueSuffix;
+    private final String queuePrefixToRemove;
+    private final int maxEndpointAttempts;
+    private final long initialBackoffMs;
+    private final Duration httpTimeout;
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -51,9 +50,28 @@ public class QueueNameResolver {
     private final Map<String, String> topicQueueCache;
 
     public QueueNameResolver() {
-        this(HttpClient.newBuilder().connectTimeout(HTTP_TIMEOUT).build(),
-                resolveConfiguredEndpoint(FUNCTION_ENDPOINT_SYSTEM_PROPERTY, FUNCTION_ENDPOINT_ENV_VAR),
-                resolveConfiguredEndpoint(TOPIC_ENDPOINT_SYSTEM_PROPERTY, TOPIC_ENDPOINT_ENV_VAR));
+        Config config = ConfigProvider.getConfig();
+
+        this.defaultQueueSuffix = config.getOptionalValue(
+                "codesnap.queue.default.suffix", String.class).orElse("_queue");
+        this.queuePrefixToRemove = config.getOptionalValue(
+                "codesnap.queue.prefix.to.remove", String.class).orElse("OCP.DEV.");
+        this.maxEndpointAttempts = config.getOptionalValue(
+                "codesnap.queue.max.endpoint.attempts", Integer.class).orElse(3);
+        this.initialBackoffMs = config.getOptionalValue(
+                "codesnap.queue.initial.backoff.ms", Long.class).orElse(200L);
+        int timeoutSeconds = config.getOptionalValue(
+                "codesnap.queue.http.timeout.seconds", Integer.class).orElse(2);
+        this.httpTimeout = Duration.ofSeconds(timeoutSeconds);
+
+        this.httpClient = HttpClient.newBuilder().connectTimeout(this.httpTimeout).build();
+        this.objectMapper = new ObjectMapper();
+        this.functionResolverEndpoint = resolveEndpointFromConfig(config,
+                "codesnap.queue.function.resolver.url");
+        this.topicResolverEndpoint = resolveEndpointFromConfig(config,
+                "codesnap.queue.topic.resolver.url");
+        this.functionQueueCache = new HashMap<>();
+        this.topicQueueCache = new HashMap<>();
     }
 
     public QueueNameResolver(HttpClient httpClient, URI functionResolverEndpoint, URI topicResolverEndpoint) {
@@ -63,6 +81,12 @@ public class QueueNameResolver {
         this.topicResolverEndpoint = topicResolverEndpoint;
         this.functionQueueCache = new HashMap<>();
         this.topicQueueCache = new HashMap<>();
+
+        this.defaultQueueSuffix = "_queue";
+        this.queuePrefixToRemove = "OCP.DEV.";
+        this.maxEndpointAttempts = 3;
+        this.initialBackoffMs = 200L;
+        this.httpTimeout = Duration.ofSeconds(2);
     }
 
     /**
@@ -150,14 +174,14 @@ public class QueueNameResolver {
             return Optional.empty();
         }
 
-        for (int attempt = 1; attempt <= MAX_ENDPOINT_ATTEMPTS; attempt++) {
+        for (int attempt = 1; attempt <= maxEndpointAttempts; attempt++) {
             EndpointLookupResult result = callResolverEndpoint(
                     endpoint, targetName, targetType, queueNameKey, httpMethod);
             if (result.queueName() != null) {
                 return Optional.of(result.queueName());
             }
 
-            if (!result.retryable() || attempt == MAX_ENDPOINT_ATTEMPTS) {
+            if (!result.retryable() || attempt == maxEndpointAttempts) {
                 break;
             }
 
@@ -177,7 +201,7 @@ public class QueueNameResolver {
         try {
             URI requestUri = buildRequestUri(endpoint, targetName);
             HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(requestUri)
-                    .timeout(HTTP_TIMEOUT);
+                    .timeout(httpTimeout);
 
             if (httpMethod == HttpMethod.POST) {
                 requestBuilder.POST(HttpRequest.BodyPublishers.noBody());
@@ -273,13 +297,13 @@ public class QueueNameResolver {
     }
 
     private boolean sleepBeforeRetry(String targetType, String targetName, int attempt) {
-        long exponentialDelay = INITIAL_BACKOFF_MS * (1L << (attempt - 1));
+        long exponentialDelay = initialBackoffMs * (1L << (attempt - 1));
         long jitterMs = ThreadLocalRandom.current().nextLong(50L);
         long totalDelayMs = exponentialDelay + jitterMs;
 
         LOGGER.log(Level.FINE,
                 "Retrying {0} queue resolver for {1} in {2}ms (attempt {3}/{4})",
-                new Object[]{targetType, targetName, totalDelayMs, attempt + 1, MAX_ENDPOINT_ATTEMPTS});
+                new Object[]{targetType, targetName, totalDelayMs, attempt + 1, maxEndpointAttempts});
 
         try {
             Thread.sleep(totalDelayMs);
@@ -291,32 +315,29 @@ public class QueueNameResolver {
         }
     }
 
-    private static URI resolveConfiguredEndpoint(String systemPropertyName, String envVarName) {
-        String endpoint = System.getProperty(systemPropertyName);
-        if (endpoint == null || endpoint.isBlank()) {
-            endpoint = System.getenv(envVarName);
-        }
-
-        if (endpoint == null || endpoint.isBlank()) {
+    private static URI resolveEndpointFromConfig(Config config, String propertyName) {
+        Optional<String> endpoint = config.getOptionalValue(propertyName, String.class);
+        if (endpoint.isEmpty() || endpoint.get().isBlank()) {
             return null;
         }
 
         try {
-            return URI.create(endpoint.trim());
+            return URI.create(endpoint.get().trim());
         } catch (IllegalArgumentException e) {
-            LOGGER.log(Level.WARNING, "Ignoring invalid endpoint URL: " + endpoint, e);
+            LOGGER.log(Level.WARNING,
+                    "Ignoring invalid endpoint URL for " + propertyName + ": " + endpoint.get(), e);
             return null;
         }
     }
 
     private String generateDefaultQueueName(String targetName) {
-        return targetName + DEFAULT_QUEUE_SUFFIX;
+        return targetName + defaultQueueSuffix;
     }
 
     private String normalizeResolvedQueueName(String queueName) {
         String normalizedQueueName = queueName.trim();
-        if (normalizedQueueName.regionMatches(true, 0, QUEUE_PREFIX_TO_REMOVE, 0, QUEUE_PREFIX_TO_REMOVE.length())) {
-            return normalizedQueueName.substring(QUEUE_PREFIX_TO_REMOVE.length());
+        if (normalizedQueueName.regionMatches(true, 0, queuePrefixToRemove, 0, queuePrefixToRemove.length())) {
+            return normalizedQueueName.substring(queuePrefixToRemove.length());
         }
         return normalizedQueueName;
     }
