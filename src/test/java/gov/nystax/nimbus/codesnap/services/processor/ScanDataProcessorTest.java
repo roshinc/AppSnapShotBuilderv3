@@ -3,6 +3,8 @@ package gov.nystax.nimbus.codesnap.services.processor;
 import gov.nystax.nimbus.codesnap.services.processor.domain.EntryPointDependencies;
 import gov.nystax.nimbus.codesnap.services.processor.domain.ScanData;
 import gov.nystax.nimbus.codesnap.services.processor.domain.ServiceCallReference;
+import gov.nystax.nimbus.codesnap.services.scanner.domain.CtgInvocation;
+import gov.nystax.nimbus.codesnap.services.scanner.domain.CtgUsage;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.EventPublisherInvocation;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.FunctionInvocation;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.LegacyGatewayHttpClientInvocation;
@@ -875,6 +877,267 @@ class ScanDataProcessorTest {
             // And the legacy gateway flag
             assertTrue(deps.isUsesLegacyGatewayHttpClient());
             // Not empty
+            assertFalse(deps.isEmpty());
+        }
+    }
+
+    @Nested
+    @DisplayName("CTG Usage Tests")
+    class CtgUsageTests {
+
+        @Test
+        @DisplayName("Should add sync CTG component to owning entry point")
+        void syncOwnership() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("processTransaction", "gov.service.IService.processTransaction(...)");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            Map<String, String> implMappings = new HashMap<>();
+            implMappings.put("gov.service.IService.processTransaction(...)", "gov.service.impl.ServiceImpl.processTransaction(...)");
+            projectInfo.setMethodImplementationMappings(implMappings);
+
+            CtgUsage usage = new CtgUsage("CTG_COMPONENT_A");
+            CtgInvocation invocation = new CtgInvocation(
+                    "ServiceImpl.java:100",
+                    new MethodReference("gov.service.impl.ServiceImpl.processTransaction(...)", MethodAccessModifier.PUBLIC),
+                    "invoke"
+            );
+            invocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.processTransaction(...)", MethodAccessModifier.PUBLIC)
+            ));
+            usage.setInvocations(List.of(invocation));
+            projectInfo.setCtgUsages(List.of(usage));
+
+            ScanData result = processor.process(projectInfo);
+
+            EntryPointDependencies deps = result.getEntryPointChildren().get("processTransaction");
+            assertNotNull(deps);
+            assertTrue(deps.getCtgComponents().contains("CTG_COMPONENT_A"));
+            assertTrue(deps.getAsyncCtgComponents().isEmpty());
+        }
+
+        @Test
+        @DisplayName("Should add async CTG component to owning entry point")
+        void asyncOwnership() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("processTransaction", "gov.service.IService.processTransaction(...)");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            Map<String, String> implMappings = new HashMap<>();
+            implMappings.put("gov.service.IService.processTransaction(...)", "gov.service.impl.ServiceImpl.processTransaction(...)");
+            projectInfo.setMethodImplementationMappings(implMappings);
+
+            CtgUsage usage = new CtgUsage("CTG_COMPONENT_B");
+            CtgInvocation invocation = new CtgInvocation(
+                    "ServiceImpl.java:200",
+                    new MethodReference("gov.service.impl.ServiceImpl.processTransaction(...)", MethodAccessModifier.PUBLIC),
+                    "invokeAsync"
+            );
+            invocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.processTransaction(...)", MethodAccessModifier.PUBLIC)
+            ));
+            usage.setInvocations(List.of(invocation));
+            projectInfo.setCtgUsages(List.of(usage));
+
+            ScanData result = processor.process(projectInfo);
+
+            EntryPointDependencies deps = result.getEntryPointChildren().get("processTransaction");
+            assertNotNull(deps);
+            assertTrue(deps.getAsyncCtgComponents().contains("CTG_COMPONENT_B"));
+            assertTrue(deps.getCtgComponents().isEmpty());
+        }
+
+        @Test
+        @DisplayName("Should set CTG components on multiple owners when call chain has multiple entry points")
+        void multipleOwners() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("entry1", "gov.service.IService.entry1(...)");
+            functionMappings.put("entry2", "gov.service.IService.entry2(...)");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            Map<String, String> implMappings = new HashMap<>();
+            implMappings.put("gov.service.IService.entry1(...)", "gov.service.impl.ServiceImpl.entry1(...)");
+            implMappings.put("gov.service.IService.entry2(...)", "gov.service.impl.ServiceImpl.entry2(...)");
+            projectInfo.setMethodImplementationMappings(implMappings);
+
+            CtgUsage usage = new CtgUsage("CTG_SHARED");
+            CtgInvocation invocation = new CtgInvocation(
+                    "ServiceImpl.java:300",
+                    new MethodReference("gov.service.impl.ServiceImpl.helper(...)", MethodAccessModifier.PRIVATE),
+                    "invoke"
+            );
+            invocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.entry1(...)", MethodAccessModifier.PUBLIC),
+                    new MethodReference("gov.service.impl.ServiceImpl.helper(...)", MethodAccessModifier.PRIVATE),
+                    new MethodReference("gov.service.impl.ServiceImpl.entry2(...)", MethodAccessModifier.PUBLIC)
+            ));
+            usage.setInvocations(List.of(invocation));
+            projectInfo.setCtgUsages(List.of(usage));
+
+            ScanData result = processor.process(projectInfo);
+
+            assertTrue(result.getEntryPointChildren().get("entry1").getCtgComponents().contains("CTG_SHARED"));
+            assertTrue(result.getEntryPointChildren().get("entry2").getCtgComponents().contains("CTG_SHARED"));
+        }
+
+        @Test
+        @DisplayName("Should add CTG components to publicMethodDependencies for public methods")
+        void publicMethodDeps() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("entryPoint", "gov.service.IService.entryPoint(...)");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            Map<String, String> implMappings = new HashMap<>();
+            implMappings.put("gov.service.IService.entryPoint(...)", "gov.service.impl.ServiceImpl.entryPoint(...)");
+            projectInfo.setMethodImplementationMappings(implMappings);
+
+            CtgUsage usage = new CtgUsage("CTG_PUBLIC");
+            CtgInvocation invocation = new CtgInvocation(
+                    "ServiceImpl.java:100",
+                    new MethodReference("gov.service.impl.ServiceImpl.entryPoint(...)", MethodAccessModifier.PUBLIC),
+                    "invoke"
+            );
+            invocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.entryPoint(...)", MethodAccessModifier.PUBLIC)
+            ));
+            usage.setInvocations(List.of(invocation));
+            projectInfo.setCtgUsages(List.of(usage));
+
+            ScanData result = processor.process(projectInfo);
+
+            Map<String, EntryPointDependencies> publicDeps = result.getPublicMethodDependencies();
+            assertTrue(publicDeps.containsKey("gov.service.impl.ServiceImpl.entryPoint(...)"));
+            assertTrue(publicDeps.get("gov.service.impl.ServiceImpl.entryPoint(...)").getCtgComponents().contains("CTG_PUBLIC"));
+        }
+
+        @Test
+        @DisplayName("Should not include private methods in publicMethodDependencies")
+        void privateMethodsExcluded() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("entryPoint", "gov.service.IService.entryPoint(...)");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            Map<String, String> implMappings = new HashMap<>();
+            implMappings.put("gov.service.IService.entryPoint(...)", "gov.service.impl.ServiceImpl.entryPoint(...)");
+            projectInfo.setMethodImplementationMappings(implMappings);
+
+            CtgUsage usage = new CtgUsage("CTG_PRIVATE_TEST");
+            CtgInvocation invocation = new CtgInvocation(
+                    "ServiceImpl.java:100",
+                    new MethodReference("gov.service.impl.ServiceImpl.privateHelper(...)", MethodAccessModifier.PRIVATE),
+                    "invoke"
+            );
+            invocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.entryPoint(...)", MethodAccessModifier.PUBLIC),
+                    new MethodReference("gov.service.impl.ServiceImpl.privateHelper(...)", MethodAccessModifier.PRIVATE)
+            ));
+            usage.setInvocations(List.of(invocation));
+            projectInfo.setCtgUsages(List.of(usage));
+
+            ScanData result = processor.process(projectInfo);
+
+            Map<String, EntryPointDependencies> publicDeps = result.getPublicMethodDependencies();
+            assertTrue(publicDeps.containsKey("gov.service.impl.ServiceImpl.entryPoint(...)"));
+            assertFalse(publicDeps.containsKey("gov.service.impl.ServiceImpl.privateHelper(...)"));
+        }
+
+        @Test
+        @DisplayName("Should handle empty call chain gracefully")
+        void emptyCallChain() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("func1", "interface.method1()");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            CtgUsage usage = new CtgUsage("CTG_EMPTY");
+            CtgInvocation invocation = new CtgInvocation(
+                    "ServiceImpl.java:100",
+                    new MethodReference("gov.service.impl.ServiceImpl.method(...)", MethodAccessModifier.PUBLIC),
+                    "invoke"
+            );
+            invocation.setCallChain(new ArrayList<>());
+            usage.setInvocations(List.of(invocation));
+            projectInfo.setCtgUsages(List.of(usage));
+
+            ScanData result = processor.process(projectInfo);
+
+            assertNotNull(result);
+            assertTrue(result.getEntryPointChildren().get("func1").getCtgComponents().isEmpty());
+        }
+
+        @Test
+        @DisplayName("Should handle null CTG usages gracefully")
+        void nullCtgUsages() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("func1", "interface.method1()");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            projectInfo.setCtgUsages(null);
+
+            ScanData result = processor.process(projectInfo);
+
+            assertNotNull(result);
+            assertTrue(result.getEntryPointChildren().get("func1").getCtgComponents().isEmpty());
+        }
+
+        @Test
+        @DisplayName("Should coexist with other dependency types")
+        void mixedWithOtherDependencies() {
+            ProjectInfo projectInfo = createBasicProjectInfo();
+
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("entryPoint", "gov.service.IService.entryPoint(...)");
+            projectInfo.setFunctionMappings(functionMappings);
+
+            Map<String, String> implMappings = new HashMap<>();
+            implMappings.put("gov.service.IService.entryPoint(...)", "gov.service.impl.ServiceImpl.entryPoint(...)");
+            projectInfo.setMethodImplementationMappings(implMappings);
+
+            // Add a function usage (sync)
+            FunctionUsage funcUsage = new FunctionUsage("externalFunc", "gov.func.externalFunc", "dep");
+            FunctionInvocation funcInvocation = new FunctionInvocation(
+                    "ServiceImpl.java:50",
+                    new MethodReference("gov.service.impl.ServiceImpl.entryPoint(...)", MethodAccessModifier.PUBLIC),
+                    "execute"
+            );
+            funcInvocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.entryPoint(...)", MethodAccessModifier.PUBLIC)
+            ));
+            funcUsage.setInvocations(List.of(funcInvocation));
+            projectInfo.setFunctionUsages(List.of(funcUsage));
+
+            // Add a CTG usage
+            CtgUsage ctgUsage = new CtgUsage("CTG_MIXED");
+            CtgInvocation ctgInvocation = new CtgInvocation(
+                    "ServiceImpl.java:100",
+                    new MethodReference("gov.service.impl.ServiceImpl.entryPoint(...)", MethodAccessModifier.PUBLIC),
+                    "invoke"
+            );
+            ctgInvocation.setCallChain(List.of(
+                    new MethodReference("gov.service.impl.ServiceImpl.entryPoint(...)", MethodAccessModifier.PUBLIC)
+            ));
+            ctgUsage.setInvocations(List.of(ctgInvocation));
+            projectInfo.setCtgUsages(List.of(ctgUsage));
+
+            ScanData result = processor.process(projectInfo);
+
+            EntryPointDependencies deps = result.getEntryPointChildren().get("entryPoint");
+            assertNotNull(deps);
+            assertTrue(deps.getFunctions().contains("externalFunc"));
+            assertTrue(deps.getCtgComponents().contains("CTG_MIXED"));
             assertFalse(deps.isEmpty());
         }
     }

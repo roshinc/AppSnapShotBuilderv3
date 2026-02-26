@@ -34,6 +34,9 @@ public class ChildReference {
     @JsonProperty("queueName")
     private String queueName;
 
+    @JsonProperty("ctgInvoke")
+    private Boolean ctgInvoke;
+
     private ChildReference() {
     }
 
@@ -79,6 +82,35 @@ public class ChildReference {
         return ref;
     }
 
+    /**
+     * Creates a synchronous CTG component reference.
+     *
+     * @param ctgComponentId the CTG component ID to reference
+     * @return a sync CTG reference
+     */
+    public static ChildReference ctgRef(String ctgComponentId) {
+        ChildReference ref = new ChildReference();
+        ref.ref = ctgComponentId;
+        ref.ctgInvoke = true;
+        return ref;
+    }
+
+    /**
+     * Creates an asynchronous CTG component reference.
+     *
+     * @param ctgComponentId the CTG component ID to reference
+     * @param queueName the queue name for async execution
+     * @return an async CTG reference
+     */
+    public static ChildReference asyncCtgRef(String ctgComponentId, String queueName) {
+        ChildReference ref = new ChildReference();
+        ref.ref = ctgComponentId;
+        ref.ctgInvoke = true;
+        ref.async = true;
+        ref.queueName = queueName;
+        return ref;
+    }
+
     public String getRef() {
         return ref;
     }
@@ -100,15 +132,27 @@ public class ChildReference {
     }
 
     public boolean isSyncRef() {
-        return ref != null && (async == null || !async) && topicPublish == null;
+        return ref != null && (async == null || !async) && topicPublish == null && (ctgInvoke == null || !ctgInvoke);
     }
 
     public boolean isAsyncRef() {
-        return ref != null && async != null && async;
+        return ref != null && async != null && async && (ctgInvoke == null || !ctgInvoke);
     }
 
     public boolean isTopicRef() {
         return topicPublish != null && topicPublish;
+    }
+
+    public boolean isCtgRef() {
+        return ctgInvoke != null && ctgInvoke && (async == null || !async);
+    }
+
+    public boolean isAsyncCtgRef() {
+        return ctgInvoke != null && ctgInvoke && async != null && async;
+    }
+
+    public Boolean getCtgInvoke() {
+        return ctgInvoke;
     }
 
     @Override
@@ -120,17 +164,22 @@ public class ChildReference {
                 Objects.equals(async, that.async) &&
                 Objects.equals(topicName, that.topicName) &&
                 Objects.equals(topicPublish, that.topicPublish) &&
-                Objects.equals(queueName, that.queueName);
+                Objects.equals(queueName, that.queueName) &&
+                Objects.equals(ctgInvoke, that.ctgInvoke);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(ref, async, topicName, topicPublish, queueName);
+        return Objects.hash(ref, async, topicName, topicPublish, queueName, ctgInvoke);
     }
 
     @Override
     public String toString() {
-        if (isSyncRef()) {
+        if (isCtgRef()) {
+            return "CtgRef{" + ref + "}";
+        } else if (isAsyncCtgRef()) {
+            return "AsyncCtgRef{" + ref + ", queue=" + queueName + "}";
+        } else if (isSyncRef()) {
             return "SyncRef{" + ref + "}";
         } else if (isAsyncRef()) {
             return "AsyncRef{" + ref + ", queue=" + queueName + "}";

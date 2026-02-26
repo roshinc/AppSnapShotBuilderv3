@@ -42,6 +42,20 @@ public class EntryPointDependencies {
     private List<ServiceCallReference> serviceCalls;
 
     /**
+     * Synchronous CTG client invocations (invocationType: "invoke").
+     * Contains CTG component IDs.
+     */
+    @JsonProperty("ctgComponents")
+    private Set<String> ctgComponents;
+
+    /**
+     * Asynchronous CTG client invocations (invocationType: "invokeAsync").
+     * Contains CTG component IDs. Queue names are resolved at build time.
+     */
+    @JsonProperty("asyncCtgComponents")
+    private Set<String> asyncCtgComponents;
+
+    /**
      * Whether this entry point (directly or transitively) invokes the legacy gateway HTTP client.
      */
     @JsonProperty("usesLegacyGatewayHttpClient")
@@ -51,6 +65,8 @@ public class EntryPointDependencies {
         this.functions = new LinkedHashSet<>();
         this.asyncFunctions = new LinkedHashSet<>();
         this.topics = new LinkedHashSet<>();
+        this.ctgComponents = new LinkedHashSet<>();
+        this.asyncCtgComponents = new LinkedHashSet<>();
         this.serviceCalls = new ArrayList<>();
     }
 
@@ -62,6 +78,8 @@ public class EntryPointDependencies {
         copy.functions = new LinkedHashSet<>(this.functions);
         copy.asyncFunctions = new LinkedHashSet<>(this.asyncFunctions);
         copy.topics = new LinkedHashSet<>(this.topics);
+        copy.ctgComponents = new LinkedHashSet<>(this.ctgComponents);
+        copy.asyncCtgComponents = new LinkedHashSet<>(this.asyncCtgComponents);
         copy.serviceCalls = new ArrayList<>();
         for (ServiceCallReference call : this.serviceCalls) {
             copy.serviceCalls.add(call.copy());
@@ -81,6 +99,8 @@ public class EntryPointDependencies {
         this.functions.addAll(other.functions);
         this.asyncFunctions.addAll(other.asyncFunctions);
         this.topics.addAll(other.topics);
+        this.ctgComponents.addAll(other.ctgComponents);
+        this.asyncCtgComponents.addAll(other.asyncCtgComponents);
         this.usesLegacyGatewayHttpClient |= other.usesLegacyGatewayHttpClient;
 
         // For service calls, avoid duplicates based on serviceId + interfaceMethod
@@ -101,6 +121,8 @@ public class EntryPointDependencies {
         return functions.isEmpty() &&
                asyncFunctions.isEmpty() &&
                topics.isEmpty() &&
+               ctgComponents.isEmpty() &&
+               asyncCtgComponents.isEmpty() &&
                serviceCalls.isEmpty() &&
                !usesLegacyGatewayHttpClient;
     }
@@ -115,6 +137,14 @@ public class EntryPointDependencies {
 
     public void addTopic(String topicName) {
         this.topics.add(topicName);
+    }
+
+    public void addCtgComponent(String ctgComponentId) {
+        this.ctgComponents.add(ctgComponentId);
+    }
+
+    public void addAsyncCtgComponent(String ctgComponentId) {
+        this.asyncCtgComponents.add(ctgComponentId);
     }
 
     public void addServiceCall(String serviceId, String interfaceMethod) {
@@ -152,6 +182,22 @@ public class EntryPointDependencies {
         this.topics = topics == null ? new LinkedHashSet<>() : new LinkedHashSet<>(topics);
     }
 
+    public Set<String> getCtgComponents() {
+        return ctgComponents == null ? null : new LinkedHashSet<>(ctgComponents);
+    }
+
+    public void setCtgComponents(Set<String> ctgComponents) {
+        this.ctgComponents = ctgComponents == null ? new LinkedHashSet<>() : new LinkedHashSet<>(ctgComponents);
+    }
+
+    public Set<String> getAsyncCtgComponents() {
+        return asyncCtgComponents == null ? null : new LinkedHashSet<>(asyncCtgComponents);
+    }
+
+    public void setAsyncCtgComponents(Set<String> asyncCtgComponents) {
+        this.asyncCtgComponents = asyncCtgComponents == null ? new LinkedHashSet<>() : new LinkedHashSet<>(asyncCtgComponents);
+    }
+
     public List<ServiceCallReference> getServiceCalls() {
         return serviceCalls == null ? null : new ArrayList<>(serviceCalls);
     }
@@ -177,12 +223,14 @@ public class EntryPointDependencies {
                 Objects.equals(functions, that.functions) &&
                 Objects.equals(asyncFunctions, that.asyncFunctions) &&
                 Objects.equals(topics, that.topics) &&
+                Objects.equals(ctgComponents, that.ctgComponents) &&
+                Objects.equals(asyncCtgComponents, that.asyncCtgComponents) &&
                 Objects.equals(serviceCalls, that.serviceCalls);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(functions, asyncFunctions, topics, serviceCalls, usesLegacyGatewayHttpClient);
+        return Objects.hash(functions, asyncFunctions, topics, ctgComponents, asyncCtgComponents, serviceCalls, usesLegacyGatewayHttpClient);
     }
 
     @Override
@@ -191,6 +239,8 @@ public class EntryPointDependencies {
                 "functions=" + functions +
                 ", asyncFunctions=" + asyncFunctions +
                 ", topics=" + topics +
+                ", ctgComponents=" + ctgComponents +
+                ", asyncCtgComponents=" + asyncCtgComponents +
                 ", serviceCalls=" + serviceCalls +
                 ", usesLegacyGatewayHttpClient=" + usesLegacyGatewayHttpClient +
                 '}';

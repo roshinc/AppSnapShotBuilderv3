@@ -311,6 +311,27 @@ public class AppSnapshotBuilder {
             }
         }
 
+        // Add sync CTG component dependencies
+        Set<String> ctgComponents = deps.getCtgComponents();
+        if (ctgComponents != null) {
+            for (String ctgId : ctgComponents) {
+                if (!poolEntry.containsCtgRef(ctgId)) {
+                    poolEntry.addCtgRef(ctgId);
+                }
+            }
+        }
+
+        // Add async CTG component dependencies
+        Set<String> asyncCtgComponents = deps.getAsyncCtgComponents();
+        if (asyncCtgComponents != null) {
+            for (String ctgId : asyncCtgComponents) {
+                if (!poolEntry.containsAsyncCtgRef(ctgId)) {
+                    String queueName = queueNameResolver.resolveForFunction(connection, ctgId);
+                    poolEntry.addAsyncCtgRef(ctgId, queueName);
+                }
+            }
+        }
+
         // Propagate legacy gateway HTTP client flag
         if (deps.isUsesLegacyGatewayHttpClient()) {
             poolEntry.setUsesLegacyGatewayHttpClient(true);
@@ -356,6 +377,23 @@ public class AppSnapshotBuilder {
             }
         }
 
+        // Add sync CTG component refs
+        Set<String> ctgComponents = deps.getCtgComponents();
+        if (ctgComponents != null) {
+            for (String ctgId : ctgComponents) {
+                methodNode.addCtgRef(ctgId);
+            }
+        }
+
+        // Add async CTG component refs
+        Set<String> asyncCtgComponents = deps.getAsyncCtgComponents();
+        if (asyncCtgComponents != null) {
+            for (String ctgId : asyncCtgComponents) {
+                String queueName = queueNameResolver.resolveForFunction(connection, ctgId);
+                methodNode.addAsyncCtgRef(ctgId, queueName);
+            }
+        }
+
         // Propagate legacy gateway HTTP client flag from direct dependencies
         if (deps.isUsesLegacyGatewayHttpClient()) {
             methodNode.setUsesLegacyGatewayHttpClient(true);
@@ -370,7 +408,11 @@ public class AppSnapshotBuilder {
 
             // Add collected dependencies to the method node
             for (var child : transitiveCollector.getChildren()) {
-                if (child.isSyncRef()) {
+                if (child.isCtgRef()) {
+                    methodNode.addCtgRef(child.getRef());
+                } else if (child.isAsyncCtgRef()) {
+                    methodNode.addAsyncCtgRef(child.getRef(), child.getQueueName());
+                } else if (child.isSyncRef()) {
                     methodNode.addFunctionRef(child.getRef());
                 } else if (child.isAsyncRef()) {
                     methodNode.addAsyncFunctionRef(child.getRef(), child.getQueueName());

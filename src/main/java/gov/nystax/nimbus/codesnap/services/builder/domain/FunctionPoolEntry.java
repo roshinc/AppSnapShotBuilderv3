@@ -110,6 +110,14 @@ public class FunctionPoolEntry {
         this.children.add(ChildReference.topicPublishRef(topicName, queueName));
     }
 
+    public void addCtgRef(String ctgComponentId) {
+        this.children.add(ChildReference.ctgRef(ctgComponentId));
+    }
+
+    public void addAsyncCtgRef(String ctgComponentId, String queueName) {
+        this.children.add(ChildReference.asyncCtgRef(ctgComponentId, queueName));
+    }
+
     /**
      * Checks if this function entry already contains a reference to the given function.
      */
@@ -132,6 +140,22 @@ public class FunctionPoolEntry {
     public boolean containsTopicRef(String topicName) {
         return children.stream()
                 .anyMatch(c -> c.isTopicRef() && topicName.equals(c.getTopicName()));
+    }
+
+    /**
+     * Checks if this function entry already contains a sync CTG reference.
+     */
+    public boolean containsCtgRef(String ctgComponentId) {
+        return children.stream()
+                .anyMatch(c -> c.isCtgRef() && ctgComponentId.equals(c.getRef()));
+    }
+
+    /**
+     * Checks if this function entry already contains an async CTG reference.
+     */
+    public boolean containsAsyncCtgRef(String ctgComponentId) {
+        return children.stream()
+                .anyMatch(c -> c.isAsyncCtgRef() && ctgComponentId.equals(c.getRef()));
     }
 
     public List<ChildReference> getChildren() {

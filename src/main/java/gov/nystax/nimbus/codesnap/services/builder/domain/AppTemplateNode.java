@@ -51,6 +51,9 @@ public class AppTemplateNode {
     @JsonProperty("topicPublish")
     private Boolean topicPublish;
 
+    @JsonProperty("ctgInvoke")
+    private Boolean ctgInvoke;
+
     @JsonProperty("usesLegacyGatewayHttpClient")
     private Boolean usesLegacyGatewayHttpClient;
 
@@ -104,6 +107,28 @@ public class AppTemplateNode {
     }
 
     /**
+     * Creates a synchronous CTG component reference node.
+     */
+    public static AppTemplateNode ctgRef(String ctgComponentId) {
+        AppTemplateNode node = new AppTemplateNode();
+        node.ref = ctgComponentId;
+        node.ctgInvoke = true;
+        return node;
+    }
+
+    /**
+     * Creates an asynchronous CTG component reference node.
+     */
+    public static AppTemplateNode asyncCtgRef(String ctgComponentId, String queueName) {
+        AppTemplateNode node = new AppTemplateNode();
+        node.ref = ctgComponentId;
+        node.ctgInvoke = true;
+        node.async = true;
+        node.queueName = queueName;
+        return node;
+    }
+
+    /**
      * Creates a UI services container node.
      */
     public static AppTemplateNode uiServices(String serviceName) {
@@ -142,6 +167,14 @@ public class AppTemplateNode {
 
     public void addTopicPublishRef(String topicName, String queueName) {
         addChild(topicPublishRef(topicName, queueName));
+    }
+
+    public void addCtgRef(String ctgComponentId) {
+        addChild(ctgRef(ctgComponentId));
+    }
+
+    public void addAsyncCtgRef(String ctgComponentId, String queueName) {
+        addChild(asyncCtgRef(ctgComponentId, queueName));
     }
 
     // Getters and setters
@@ -202,6 +235,14 @@ public class AppTemplateNode {
         this.topicPublish = topicPublish;
     }
 
+    public Boolean getCtgInvoke() {
+        return ctgInvoke;
+    }
+
+    public void setCtgInvoke(Boolean ctgInvoke) {
+        this.ctgInvoke = ctgInvoke;
+    }
+
     public Boolean getUsesLegacyGatewayHttpClient() {
         return usesLegacyGatewayHttpClient;
     }
@@ -234,6 +275,7 @@ public class AppTemplateNode {
                 Objects.equals(queueName, that.queueName) &&
                 Objects.equals(topicName, that.topicName) &&
                 Objects.equals(topicPublish, that.topicPublish) &&
+                Objects.equals(ctgInvoke, that.ctgInvoke) &&
                 Objects.equals(usesLegacyGatewayHttpClient, that.usesLegacyGatewayHttpClient) &&
                 Objects.equals(children, that.children);
     }
@@ -241,14 +283,19 @@ public class AppTemplateNode {
     @Override
     public int hashCode() {
         return Objects.hash(name, type, ref, async, queueName, topicName, topicPublish,
-                usesLegacyGatewayHttpClient, children);
+                ctgInvoke, usesLegacyGatewayHttpClient, children);
     }
 
     @Override
     public String toString() {
+        if (ctgInvoke != null && ctgInvoke) {
+            return async != null && async ?
+                    "AsyncCtgRef{" + ref + "}" :
+                    "CtgRef{" + ref + "}";
+        }
         if (ref != null) {
-            return async != null && async ? 
-                    "AsyncRef{" + ref + "}" : 
+            return async != null && async ?
+                    "AsyncRef{" + ref + "}" :
                     "Ref{" + ref + "}";
         }
         if (topicPublish != null && topicPublish) {

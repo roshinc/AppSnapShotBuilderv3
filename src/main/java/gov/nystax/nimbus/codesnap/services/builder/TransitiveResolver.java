@@ -181,6 +181,27 @@ public class TransitiveResolver {
             }
         }
 
+        // Add sync CTG component dependencies
+        Set<String> ctgComponents = deps.getCtgComponents();
+        if (ctgComponents != null) {
+            for (String ctgId : ctgComponents) {
+                if (!targetEntry.containsCtgRef(ctgId)) {
+                    targetEntry.addCtgRef(ctgId);
+                }
+            }
+        }
+
+        // Add async CTG component dependencies
+        Set<String> asyncCtgComponents = deps.getAsyncCtgComponents();
+        if (asyncCtgComponents != null) {
+            for (String ctgId : asyncCtgComponents) {
+                if (!targetEntry.containsAsyncCtgRef(ctgId)) {
+                    String queueName = queueNameResolver.resolveForFunction(connection, ctgId);
+                    targetEntry.addAsyncCtgRef(ctgId, queueName);
+                }
+            }
+        }
+
         // Propagate legacy gateway HTTP client flag
         if (deps.isUsesLegacyGatewayHttpClient()) {
             targetEntry.setUsesLegacyGatewayHttpClient(true);

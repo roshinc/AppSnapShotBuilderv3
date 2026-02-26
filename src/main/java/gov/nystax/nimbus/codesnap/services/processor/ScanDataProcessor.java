@@ -2,6 +2,8 @@ package gov.nystax.nimbus.codesnap.services.processor;
 
 import gov.nystax.nimbus.codesnap.services.processor.domain.EntryPointDependencies;
 import gov.nystax.nimbus.codesnap.services.processor.domain.ScanData;
+import gov.nystax.nimbus.codesnap.services.scanner.domain.CtgInvocation;
+import gov.nystax.nimbus.codesnap.services.scanner.domain.CtgUsage;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.EventPublisherInvocation;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.FunctionInvocation;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.FunctionUsage;
@@ -38,6 +40,8 @@ public class ScanDataProcessor {
 
     private static final String INVOCATION_TYPE_EXECUTE = "execute";
     private static final String INVOCATION_TYPE_EXECUTE_ASYNC = "executeAsync";
+    private static final String INVOCATION_TYPE_INVOKE = "invoke";
+    private static final String INVOCATION_TYPE_INVOKE_ASYNC = "invokeAsync";
 
     /**
      * Placeholder topic name used when the topic cannot be resolved at scan time.
@@ -76,6 +80,7 @@ public class ScanDataProcessor {
         processServiceUsages(projectInfo, scanData, implToInterface, interfaceToEntryPoint);
         processEventPublisherInvocations(projectInfo, scanData, implToInterface, interfaceToEntryPoint);
         processLegacyGatewayHttpClientInvocations(projectInfo, scanData, implToInterface, interfaceToEntryPoint);
+        processCtgUsages(projectInfo, scanData, implToInterface, interfaceToEntryPoint);
 
         LOGGER.log(Level.INFO, "Completed processing scan data for service: {0}. " +
                         "Entry points: {1}, Public methods with deps: {2}",
@@ -418,6 +423,76 @@ public class ScanDataProcessor {
                     EntryPointDependencies methodDeps = publicMethodDeps.computeIfAbsent(
                             implMethod, k -> new EntryPointDependencies());
                     methodDeps.setUsesLegacyGatewayHttpClient(true);
+                }
+            }
+        }
+
+        scanData.setEntryPointChildren(entryPointChildren);
+        scanData.setPublicMethodDependencies(publicMethodDeps);
+    }
+
+    /**
+     * Processes CTG usages and updates both entryPointChildren and publicMethodDependencies.
+     * CTG invocations with invocationType "invoke" are tracked as sync, "invokeAsync" as async.
+     */
+    private void processCtgUsages(ProjectInfo projectInfo,
+                                   ScanData scanData,
+                                   Map<String, String> implToInterface,
+                                   Map<String, String> interfaceToEntryPoint) {
+        List<CtgUsage> ctgUsages = projectInfo.getCtgUsages();
+        if (ctgUsages == null) {
+            return;
+        }
+
+        Map<String, EntryPointDependencies> entryPointChildren = scanData.getEntryPointChildren();
+        Map<String, EntryPointDependencies> publicMethodDeps = scanData.getPublicMethodDependencies();
+        if (publicMethodDeps == null) {
+            publicMethodDeps = new HashMap<>();
+        }
+
+        for (CtgUsage usage : ctgUsages) {
+            String ctgComponentId = usage.getCtgComponentId();
+            List<CtgInvocation> invocations = usage.getInvocations();
+
+            if (invocations == null) {
+                continue;
+            }
+
+            for (CtgInvocation invocation : invocations) {
+                boolean isAsync = INVOCATION_TYPE_INVOKE_ASYNC.equals(invocation.getInvocationType());
+                List<MethodReference> callChain = invocation.getCallChain();
+
+                if (callChain == null || callChain.isEmpty()) {
+                    LOGGER.log(Level.WARNING, "CTG usage {0} has empty call chain at {1}",
+                            new Object[]{ctgComponentId, invocation.getInvocationSite()});
+                    continue;
+                }
+
+                // Find owners and add to entryPointChildren
+                Set<String> owners = findOwners(callChain, implToInterface, interfaceToEntryPoint);
+                for (String owner : owners) {
+                    EntryPointDependencies deps = entryPointChildren.get(owner);
+                    if (deps != null) {
+                        if (isAsync) {
+                            deps.addAsyncCtgComponent(ctgComponentId);
+                        } else {
+                            deps.addCtgComponent(ctgComponentId);
+                        }
+                    }
+                }
+
+                // Add to publicMethodDependencies for all PUBLIC methods in call chain
+                for (MethodReference methodRef : callChain) {
+                    if (isPublicMethod(methodRef)) {
+                        String implMethod = methodRef.getMethodName();
+                        EntryPointDependencies methodDeps = publicMethodDeps.computeIfAbsent(
+                                implMethod, k -> new EntryPointDependencies());
+                        if (isAsync) {
+                            methodDeps.addAsyncCtgComponent(ctgComponentId);
+                        } else {
+                            methodDeps.addCtgComponent(ctgComponentId);
+                        }
+                    }
                 }
             }
         }
