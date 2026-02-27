@@ -109,7 +109,7 @@ class DaoSchemaAlignmentTest {
         FailedServiceScanRecord record = (FailedServiceScanRecord) invokePrivateMapMethod(
                 dao, "mapResultSetToRecord", createResultSet(values));
 
-        assertEquals("fail-1", record.getFailureId());
+        assertEquals("fail-1", record.getScanId());
         assertEquals("svc-2", record.getServiceId());
         assertEquals("def456", record.getGitCommitHash());
         assertEquals(failureTimestamp, record.getFailureTimestamp());
@@ -119,25 +119,10 @@ class DaoSchemaAlignmentTest {
         assertEquals("stack", record.getStackTrace());
     }
 
-    @Test
-    void scannerVersionDefaultsFromConfig() throws Exception {
-        ServiceScanDAO serviceDao = new ServiceScanDAO();
-        FailedServiceScanDAO failedDao = new FailedServiceScanDAO();
-
-        assertEquals(0, getPrivateInt(serviceDao, "scannerVersionNumber"));
-        assertEquals(0, getPrivateInt(failedDao, "scannerVersionNumber"));
-    }
-
     private static String getPrivateStaticString(Class<?> type, String fieldName) throws Exception {
         Field field = type.getDeclaredField(fieldName);
         field.setAccessible(true);
         return (String) field.get(null);
-    }
-
-    private static int getPrivateInt(Object target, String fieldName) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        return field.getInt(target);
     }
 
     private static Object invokePrivateMapMethod(Object target, String methodName, ResultSet rs) throws Exception {

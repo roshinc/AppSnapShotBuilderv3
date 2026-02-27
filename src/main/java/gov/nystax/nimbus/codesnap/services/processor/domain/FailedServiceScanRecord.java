@@ -17,7 +17,7 @@ import java.util.Objects;
  */
 public class FailedServiceScanRecord {
 
-    private String failureId;
+    private String scanId;
     private String serviceId;
     private String gitCommitHash;
     private Timestamp failureTimestamp;
@@ -36,12 +36,12 @@ public class FailedServiceScanRecord {
         return new Builder();
     }
 
-    public String getFailureId() {
-        return failureId;
+    public String getScanId() {
+        return scanId;
     }
 
-    public void setFailureId(String failureId) {
-        this.failureId = failureId;
+    public void setScanId(String scanId) {
+        this.scanId = scanId;
     }
 
     public String getServiceId() {
@@ -106,7 +106,7 @@ public class FailedServiceScanRecord {
         if (o == null || getClass() != o.getClass()) return false;
         FailedServiceScanRecord that = (FailedServiceScanRecord) o;
         return scannerVersionNumber == that.scannerVersionNumber &&
-                Objects.equals(failureId, that.failureId) &&
+                Objects.equals(scanId, that.scanId) &&
                 Objects.equals(serviceId, that.serviceId) &&
                 Objects.equals(gitCommitHash, that.gitCommitHash) &&
                 Objects.equals(failureTimestamp, that.failureTimestamp) &&
@@ -117,14 +117,14 @@ public class FailedServiceScanRecord {
 
     @Override
     public int hashCode() {
-        return Objects.hash(failureId, serviceId, gitCommitHash, failureTimestamp,
+        return Objects.hash(scanId, serviceId, gitCommitHash, failureTimestamp,
                 errorType, errorMessage, stackTrace, scannerVersionNumber);
     }
 
     @Override
     public String toString() {
         return "FailedServiceScanRecord{" +
-                "failureId='" + failureId + '\'' +
+                "scanId='" + scanId + '\'' +
                 ", serviceId='" + serviceId + '\'' +
                 ", gitCommitHash='" + gitCommitHash + '\'' +
                 ", failureTimestamp=" + failureTimestamp +
@@ -141,8 +141,8 @@ public class FailedServiceScanRecord {
     public static class Builder {
         private final FailedServiceScanRecord record = new FailedServiceScanRecord();
 
-        public Builder failureId(String failureId) {
-            record.setFailureId(failureId);
+        public Builder scanId(String scanId) {
+            record.setScanId(scanId);
             return this;
         }
 

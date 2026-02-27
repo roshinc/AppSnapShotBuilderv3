@@ -773,7 +773,7 @@ class AppSnapshotBuilderTest {
 
         void addFailedScan(String serviceId, String gitCommit, String errorType, String errorMessage) {
             FailedServiceScanRecord record = FailedServiceScanRecord.builder()
-                    .failureId("test-failure-" + serviceId)
+                    .scanId("test-failure-" + serviceId)
                     .serviceId(serviceId)
                     .gitCommitHash(gitCommit)
                     .failureTimestamp(new java.sql.Timestamp(System.currentTimeMillis()))

@@ -1,8 +1,6 @@
 package gov.nystax.nimbus.codesnap.services.processor.dao;
 
 import gov.nystax.nimbus.codesnap.services.processor.domain.ServiceScanRecord;
-import org.eclipse.microprofile.config.Config;
-import org.eclipse.microprofile.config.ConfigProvider;
 
 import java.sql.Clob;
 import java.sql.Connection;
@@ -25,8 +23,6 @@ import java.util.logging.Logger;
 public class ServiceScanDAO {
 
     private static final Logger LOGGER = Logger.getLogger(ServiceScanDAO.class.getName());
-    private static final String SCANNER_VERSION_CONFIG_KEY = "codesnap.scanner.version";
-    private final int scannerVersionNumber;
 
     private static final String INSERT_SQL = """
             INSERT INTO FLOW.SERVICE_SCAN (
@@ -60,19 +56,16 @@ public class ServiceScanDAO {
             WHERE SERVICE_ID = ? AND COMMIT_HASH = ?
             """;
 
-    public ServiceScanDAO() {
-        this.scannerVersionNumber = resolveScannerVersionNumber();
-    }
-
     /**
      * Inserts a new service scan record into the database.
      *
      * @param connection the database connection (transaction managed by caller)
      * @param record the record to insert
+     * @param scannerVersionNumber the scanner version to stamp on the record
      * @throws SQLException if a database error occurs
      * @throws IllegalArgumentException if required fields are missing
      */
-    public void insert(Connection connection, ServiceScanRecord record) throws SQLException {
+    public void insert(Connection connection, ServiceScanRecord record, int scannerVersionNumber) throws SQLException {
         validateRecord(record);
 
         LOGGER.log(Level.FINE, "Inserting ServiceScanRecord: serviceId={0}, gitCommitHash={1}",
@@ -293,17 +286,6 @@ public class ServiceScanDAO {
         }
         if (record.getVersion() == null || record.getVersion().isBlank()) {
             throw new IllegalArgumentException("Version is required");
-        }
-    }
-
-    private int resolveScannerVersionNumber() {
-        try {
-            Config config = ConfigProvider.getConfig();
-            return config.getOptionalValue(SCANNER_VERSION_CONFIG_KEY, Integer.class).orElse(0);
-        } catch (Exception ex) {
-            LOGGER.log(Level.WARNING,
-                    "Unable to read config " + SCANNER_VERSION_CONFIG_KEY + ", defaulting to 0", ex);
-            return 0;
         }
     }
 

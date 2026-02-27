@@ -1,8 +1,6 @@
 package gov.nystax.nimbus.codesnap.services.processor.dao;
 
 import gov.nystax.nimbus.codesnap.services.processor.domain.FailedServiceScanRecord;
-import org.eclipse.microprofile.config.Config;
-import org.eclipse.microprofile.config.ConfigProvider;
 
 import java.sql.Clob;
 import java.sql.Connection;
@@ -25,8 +23,6 @@ import java.util.logging.Logger;
 public class FailedServiceScanDAO {
 
     private static final Logger LOGGER = Logger.getLogger(FailedServiceScanDAO.class.getName());
-    private static final String SCANNER_VERSION_CONFIG_KEY = "codesnap.scanner.version";
-    private final int scannerVersionNumber;
 
     private static final String INSERT_SQL = """
             INSERT INTO FLOW.FAILED_SERVICE_SCAN (
@@ -42,7 +38,7 @@ public class FailedServiceScanDAO {
             WHERE SERVICE_ID = ? AND COMMIT_HASH = ?
             """;
 
-    private static final String SELECT_BY_FAILURE_ID_SQL = """
+    private static final String SELECT_BY_SCAN_ID_SQL = """
             SELECT SCAN_ID, SERVICE_ID, COMMIT_HASH, FAILED_TS,
                    ERROR_TYPE, ERROR_MSG, STACK_TRACE, SCANNER_VER_NMBR
             FROM FLOW.FAILED_SERVICE_SCAN
@@ -60,19 +56,16 @@ public class FailedServiceScanDAO {
             WHERE SERVICE_ID = ? AND COMMIT_HASH = ?
             """;
 
-    public FailedServiceScanDAO() {
-        this.scannerVersionNumber = resolveScannerVersionNumber();
-    }
-
     /**
      * Inserts a new failed service scan record into the database.
      *
      * @param connection the database connection (transaction managed by caller)
      * @param record     the record to insert
+     * @param scannerVersionNumber the scanner version to stamp on the record
      * @throws SQLException             if a database error occurs
      * @throws IllegalArgumentException if required fields are missing
      */
-    public void insert(Connection connection, FailedServiceScanRecord record) throws SQLException {
+    public void insert(Connection connection, FailedServiceScanRecord record, int scannerVersionNumber) throws SQLException {
         validateRecord(record);
 
         LOGGER.log(Level.FINE, "Inserting FailedServiceScanRecord: serviceId={0}, gitCommitHash={1}",
@@ -80,7 +73,7 @@ public class FailedServiceScanDAO {
 
         try (PreparedStatement stmt = connection.prepareStatement(INSERT_SQL)) {
             int paramIndex = 1;
-            stmt.setString(paramIndex++, record.getFailureId());
+            stmt.setString(paramIndex++, record.getScanId());
             stmt.setString(paramIndex++, record.getServiceId());
             stmt.setString(paramIndex++, record.getGitCommitHash());
             stmt.setTimestamp(paramIndex++, record.getFailureTimestamp());
@@ -104,8 +97,8 @@ public class FailedServiceScanDAO {
                 throw new SQLException("Expected 1 row affected, but got " + rowsAffected);
             }
 
-            LOGGER.log(Level.INFO, "Successfully inserted FailedServiceScanRecord: failureId={0}",
-                    record.getFailureId());
+            LOGGER.log(Level.INFO, "Successfully inserted FailedServiceScanRecord: scanId={0}",
+                    record.getScanId());
         }
     }
 
@@ -138,18 +131,18 @@ public class FailedServiceScanDAO {
     }
 
     /**
-     * Finds a failed service scan record by failure ID.
+     * Finds a failed service scan record by scan ID.
      *
      * @param connection the database connection
-     * @param failureId  the unique failure ID
+     * @param scanId     the unique scan ID
      * @return Optional containing the record if found, empty otherwise
      * @throws SQLException if a database error occurs
      */
-    public Optional<FailedServiceScanRecord> findByFailureId(Connection connection, String failureId) throws SQLException {
-        LOGGER.log(Level.FINE, "Finding FailedServiceScanRecord by failureId={0}", failureId);
+    public Optional<FailedServiceScanRecord> findByScanId(Connection connection, String scanId) throws SQLException {
+        LOGGER.log(Level.FINE, "Finding FailedServiceScanRecord by scanId={0}", scanId);
 
-        try (PreparedStatement stmt = connection.prepareStatement(SELECT_BY_FAILURE_ID_SQL)) {
-            stmt.setString(1, failureId);
+        try (PreparedStatement stmt = connection.prepareStatement(SELECT_BY_SCAN_ID_SQL)) {
+            stmt.setString(1, scanId);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -249,7 +242,7 @@ public class FailedServiceScanDAO {
     private FailedServiceScanRecord mapResultSetToRecord(ResultSet rs) throws SQLException {
         FailedServiceScanRecord record = new FailedServiceScanRecord();
 
-        record.setFailureId(rs.getString("SCAN_ID"));
+        record.setScanId(rs.getString("SCAN_ID"));
         record.setServiceId(rs.getString("SERVICE_ID"));
         record.setGitCommitHash(rs.getString("COMMIT_HASH"));
         record.setFailureTimestamp(rs.getTimestamp("FAILED_TS"));
@@ -273,8 +266,8 @@ public class FailedServiceScanDAO {
         if (record == null) {
             throw new IllegalArgumentException("FailedServiceScanRecord cannot be null");
         }
-        if (record.getFailureId() == null || record.getFailureId().isBlank()) {
-            throw new IllegalArgumentException("Failure ID is required");
+        if (record.getScanId() == null || record.getScanId().isBlank()) {
+            throw new IllegalArgumentException("Scan ID is required");
         }
         if (record.getServiceId() == null || record.getServiceId().isBlank()) {
             throw new IllegalArgumentException("Service ID is required");
@@ -287,17 +280,6 @@ public class FailedServiceScanDAO {
         }
         if (record.getErrorType() == null || record.getErrorType().isBlank()) {
             throw new IllegalArgumentException("Error type is required");
-        }
-    }
-
-    private int resolveScannerVersionNumber() {
-        try {
-            Config config = ConfigProvider.getConfig();
-            return config.getOptionalValue(SCANNER_VERSION_CONFIG_KEY, Integer.class).orElse(0);
-        } catch (Exception ex) {
-            LOGGER.log(Level.WARNING,
-                    "Unable to read config " + SCANNER_VERSION_CONFIG_KEY + ", defaulting to 0", ex);
-            return 0;
         }
     }
 }

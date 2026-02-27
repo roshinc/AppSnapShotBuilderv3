@@ -9,6 +9,8 @@ import gov.nystax.nimbus.codesnap.services.processor.domain.FailedServiceScanRec
 import gov.nystax.nimbus.codesnap.services.processor.domain.ScanData;
 import gov.nystax.nimbus.codesnap.services.processor.domain.ServiceScanRecord;
 import gov.nystax.nimbus.codesnap.services.scanner.domain.ProjectInfo;
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -39,17 +41,20 @@ import java.util.logging.Logger;
 public class ServiceScanService {
 
     private static final Logger LOGGER = Logger.getLogger(ServiceScanService.class.getName());
+    private static final String SCANNER_VERSION_CONFIG_KEY = "codesnap.scanner.version";
 
     private final ServiceScanRecordFactory recordFactory;
     private final ServiceScanDAO serviceScanDAO;
     private final FailedServiceScanDAO failedServiceScanDAO;
     private final ObjectMapper objectMapper;
+    private final int scannerVersionNumber;
 
     public ServiceScanService() {
         this.recordFactory = new ServiceScanRecordFactory();
         this.serviceScanDAO = new ServiceScanDAO();
         this.failedServiceScanDAO = new FailedServiceScanDAO();
         this.objectMapper = new ObjectMapper();
+        this.scannerVersionNumber = resolveScannerVersionNumber();
     }
 
     /**
@@ -58,11 +63,13 @@ public class ServiceScanService {
     public ServiceScanService(ServiceScanRecordFactory recordFactory,
                                ServiceScanDAO serviceScanDAO,
                                FailedServiceScanDAO failedServiceScanDAO,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               int scannerVersionNumber) {
         this.recordFactory = recordFactory;
         this.serviceScanDAO = serviceScanDAO;
         this.failedServiceScanDAO = failedServiceScanDAO;
         this.objectMapper = objectMapper;
+        this.scannerVersionNumber = scannerVersionNumber;
     }
 
     /**
@@ -104,7 +111,7 @@ public class ServiceScanService {
 
         // Create and store the new record
         ServiceScanRecord record = recordFactory.createRecord(projectInfo, gitCommitHash);
-        serviceScanDAO.insert(connection, record);
+        serviceScanDAO.insert(connection, record, scannerVersionNumber);
 
         return record;
     }
@@ -144,7 +151,7 @@ public class ServiceScanService {
 
         // Create the failure record
         FailedServiceScanRecord record = FailedServiceScanRecord.builder()
-                .failureId(UUID.randomUUID().toString())
+                .scanId(UUID.randomUUID().toString())
                 .serviceId(serviceId)
                 .gitCommitHash(gitCommitHash)
                 .failureTimestamp(new Timestamp(System.currentTimeMillis()))
@@ -153,7 +160,7 @@ public class ServiceScanService {
                 .stackTrace(exception != null ? getStackTraceString(exception) : null)
                 .build();
 
-        failedServiceScanDAO.insert(connection, record);
+        failedServiceScanDAO.insert(connection, record, scannerVersionNumber);
 
         return record;
     }
@@ -229,6 +236,17 @@ public class ServiceScanService {
         PrintWriter pw = new PrintWriter(sw);
         exception.printStackTrace(pw);
         return sw.toString();
+    }
+
+    private static int resolveScannerVersionNumber() {
+        try {
+            Config config = ConfigProvider.getConfig();
+            return config.getOptionalValue(SCANNER_VERSION_CONFIG_KEY, Integer.class).orElse(0);
+        } catch (Exception ex) {
+            LOGGER.log(Level.WARNING,
+                    "Unable to read config " + SCANNER_VERSION_CONFIG_KEY + ", defaulting to 0", ex);
+            return 0;
+        }
     }
 
     /**
