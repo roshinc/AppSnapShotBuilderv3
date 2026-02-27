@@ -14,10 +14,10 @@ public class ServiceScanRecord {
     private String gitCommitHash;
     private Timestamp scanTimestamp;
     private boolean isUiService;
-    private String groupId;
     private String version;
     private String serviceDependencies;  // Comma-separated service IDs
     private String scanDataJson;         // CLOB content as String
+    private int scannerVersionNumber;
 
     public ServiceScanRecord() {
     }
@@ -69,14 +69,6 @@ public class ServiceScanRecord {
         isUiService = uiService;
     }
 
-    public String getGroupId() {
-        return groupId;
-    }
-
-    public void setGroupId(String groupId) {
-        this.groupId = groupId;
-    }
-
     public String getVersion() {
         return version;
     }
@@ -101,8 +93,16 @@ public class ServiceScanRecord {
         this.scanDataJson = scanDataJson;
     }
 
+    public int getScannerVersionNumber() {
+        return scannerVersionNumber;
+    }
+
+    public void setScannerVersionNumber(int scannerVersionNumber) {
+        this.scannerVersionNumber = scannerVersionNumber;
+    }
+
     /**
-     * Returns the IS_UI_SERVICE column value ('Y' or 'N').
+     * Returns the UI_SERVICE_IND column value ('Y' or 'N').
      */
     public String getIsUiServiceDbValue() {
         return isUiService ? "Y" : "N";
@@ -125,16 +125,16 @@ public class ServiceScanRecord {
                 Objects.equals(serviceId, that.serviceId) &&
                 Objects.equals(gitCommitHash, that.gitCommitHash) &&
                 Objects.equals(scanTimestamp, that.scanTimestamp) &&
-                Objects.equals(groupId, that.groupId) &&
                 Objects.equals(version, that.version) &&
                 Objects.equals(serviceDependencies, that.serviceDependencies) &&
-                Objects.equals(scanDataJson, that.scanDataJson);
+                Objects.equals(scanDataJson, that.scanDataJson) &&
+                scannerVersionNumber == that.scannerVersionNumber;
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(scanId, serviceId, gitCommitHash, scanTimestamp,
-                isUiService, groupId, version, serviceDependencies, scanDataJson);
+                isUiService, version, serviceDependencies, scanDataJson, scannerVersionNumber);
     }
 
     @Override
@@ -145,9 +145,9 @@ public class ServiceScanRecord {
                 ", gitCommitHash='" + gitCommitHash + '\'' +
                 ", scanTimestamp=" + scanTimestamp +
                 ", isUiService=" + isUiService +
-                ", groupId='" + groupId + '\'' +
                 ", version='" + version + '\'' +
                 ", serviceDependencies='" + serviceDependencies + '\'' +
+                ", scannerVersionNumber=" + scannerVersionNumber +
                 ", scanDataJson='" + (scanDataJson != null ? "[" + scanDataJson.length() + " chars]" : "null") + '\'' +
                 '}';
     }
@@ -183,11 +183,6 @@ public class ServiceScanRecord {
             return this;
         }
 
-        public Builder groupId(String groupId) {
-            record.setGroupId(groupId);
-            return this;
-        }
-
         public Builder version(String version) {
             record.setVersion(version);
             return this;
@@ -200,6 +195,11 @@ public class ServiceScanRecord {
 
         public Builder scanDataJson(String scanDataJson) {
             record.setScanDataJson(scanDataJson);
+            return this;
+        }
+
+        public Builder scannerVersionNumber(int scannerVersionNumber) {
+            record.setScannerVersionNumber(scannerVersionNumber);
             return this;
         }
 

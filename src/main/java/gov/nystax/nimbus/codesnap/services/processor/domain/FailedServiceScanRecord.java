@@ -21,11 +21,10 @@ public class FailedServiceScanRecord {
     private String serviceId;
     private String gitCommitHash;
     private Timestamp failureTimestamp;
-    private String groupId;
-    private String version;
     private String errorType;      // e.g., "SCAN_ERROR", "PARSE_ERROR", "CODE_VIOLATION"
     private String errorMessage;   // Brief error message
     private String stackTrace;     // Full stack trace for debugging (CLOB)
+    private int scannerVersionNumber;
 
     public FailedServiceScanRecord() {
     }
@@ -69,22 +68,6 @@ public class FailedServiceScanRecord {
         this.failureTimestamp = failureTimestamp == null ? null : new Timestamp(failureTimestamp.getTime());
     }
 
-    public String getGroupId() {
-        return groupId;
-    }
-
-    public void setGroupId(String groupId) {
-        this.groupId = groupId;
-    }
-
-    public String getVersion() {
-        return version;
-    }
-
-    public void setVersion(String version) {
-        this.version = version;
-    }
-
     public String getErrorType() {
         return errorType;
     }
@@ -109,17 +92,24 @@ public class FailedServiceScanRecord {
         this.stackTrace = stackTrace;
     }
 
+    public int getScannerVersionNumber() {
+        return scannerVersionNumber;
+    }
+
+    public void setScannerVersionNumber(int scannerVersionNumber) {
+        this.scannerVersionNumber = scannerVersionNumber;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         FailedServiceScanRecord that = (FailedServiceScanRecord) o;
-        return Objects.equals(failureId, that.failureId) &&
+        return scannerVersionNumber == that.scannerVersionNumber &&
+                Objects.equals(failureId, that.failureId) &&
                 Objects.equals(serviceId, that.serviceId) &&
                 Objects.equals(gitCommitHash, that.gitCommitHash) &&
                 Objects.equals(failureTimestamp, that.failureTimestamp) &&
-                Objects.equals(groupId, that.groupId) &&
-                Objects.equals(version, that.version) &&
                 Objects.equals(errorType, that.errorType) &&
                 Objects.equals(errorMessage, that.errorMessage) &&
                 Objects.equals(stackTrace, that.stackTrace);
@@ -128,7 +118,7 @@ public class FailedServiceScanRecord {
     @Override
     public int hashCode() {
         return Objects.hash(failureId, serviceId, gitCommitHash, failureTimestamp,
-                groupId, version, errorType, errorMessage, stackTrace);
+                errorType, errorMessage, stackTrace, scannerVersionNumber);
     }
 
     @Override
@@ -138,10 +128,9 @@ public class FailedServiceScanRecord {
                 ", serviceId='" + serviceId + '\'' +
                 ", gitCommitHash='" + gitCommitHash + '\'' +
                 ", failureTimestamp=" + failureTimestamp +
-                ", groupId='" + groupId + '\'' +
-                ", version='" + version + '\'' +
                 ", errorType='" + errorType + '\'' +
                 ", errorMessage='" + errorMessage + '\'' +
+                ", scannerVersionNumber=" + scannerVersionNumber +
                 ", stackTrace='" + (stackTrace != null ? "[" + stackTrace.length() + " chars]" : "null") + '\'' +
                 '}';
     }
@@ -172,16 +161,6 @@ public class FailedServiceScanRecord {
             return this;
         }
 
-        public Builder groupId(String groupId) {
-            record.setGroupId(groupId);
-            return this;
-        }
-
-        public Builder version(String version) {
-            record.setVersion(version);
-            return this;
-        }
-
         public Builder errorType(String errorType) {
             record.setErrorType(errorType);
             return this;
@@ -194,6 +173,11 @@ public class FailedServiceScanRecord {
 
         public Builder stackTrace(String stackTrace) {
             record.setStackTrace(stackTrace);
+            return this;
+        }
+
+        public Builder scannerVersionNumber(int scannerVersionNumber) {
+            record.setScannerVersionNumber(scannerVersionNumber);
             return this;
         }
 

@@ -117,8 +117,6 @@ public class ServiceScanService {
      * @param connection the database connection (transaction managed by caller)
      * @param serviceId the service artifact ID
      * @param gitCommitHash the git commit hash of the scanned code
-     * @param groupId the Maven group ID (may be null)
-     * @param version the Maven version (may be null)
      * @param errorType the type of error (use constants from FailedServiceScanRecord.ErrorType)
      * @param errorMessage brief error message
      * @param exception the exception that caused the failure (may be null)
@@ -128,8 +126,6 @@ public class ServiceScanService {
     public FailedServiceScanRecord recordFailure(Connection connection,
                                                   String serviceId,
                                                   String gitCommitHash,
-                                                  String groupId,
-                                                  String version,
                                                   String errorType,
                                                   String errorMessage,
                                                   Throwable exception) throws SQLException {
@@ -152,8 +148,6 @@ public class ServiceScanService {
                 .serviceId(serviceId)
                 .gitCommitHash(gitCommitHash)
                 .failureTimestamp(new Timestamp(System.currentTimeMillis()))
-                .groupId(groupId)
-                .version(version)
                 .errorType(errorType != null ? errorType : FailedServiceScanRecord.ErrorType.UNKNOWN)
                 .errorMessage(errorMessage)
                 .stackTrace(exception != null ? getStackTraceString(exception) : null)
@@ -367,7 +361,7 @@ public class ServiceScanService {
     }
 
     /**
-     * Parses the SERVICE_DEPENDENCIES column value into a set of service IDs.
+     * Parses the SERVICE_DEP_TEXT column value into a set of service IDs.
      *
      * @param serviceDependencies comma-separated service IDs (may be null)
      * @return set of service IDs

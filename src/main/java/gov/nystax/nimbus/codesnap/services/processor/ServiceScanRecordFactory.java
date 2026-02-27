@@ -90,7 +90,6 @@ public class ServiceScanRecordFactory {
                 .gitCommitHash(gitCommitHash)
                 .scanTimestamp(Timestamp.from(Instant.now()))
                 .isUiService(projectInfo.isUIService())
-                .groupId(projectInfo.getGroupId())
                 .version(projectInfo.getVersion())
                 .serviceDependencies(serviceDependencies)
                 .scanDataJson(scanDataJson)

@@ -1,13 +1,14 @@
 package gov.nystax.nimbus.codesnap.services.processor.dao;
 
 import gov.nystax.nimbus.codesnap.services.processor.domain.FailedServiceScanRecord;
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
 
 import java.sql.Clob;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -24,45 +25,44 @@ import java.util.logging.Logger;
 public class FailedServiceScanDAO {
 
     private static final Logger LOGGER = Logger.getLogger(FailedServiceScanDAO.class.getName());
+    private static final String SCANNER_VERSION_CONFIG_KEY = "codesnap.scanner.version";
+    private final int scannerVersionNumber;
 
     private static final String INSERT_SQL = """
-            INSERT INTO FAILED_SERVICE_SCAN (
-                FAILURE_ID, SERVICE_ID, GIT_COMMIT_HASH, FAILURE_TIMESTAMP,
-                GROUP_ID, VERSION, ERROR_TYPE, ERROR_MESSAGE, STACK_TRACE
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO FLOW.FAILED_SERVICE_SCAN (
+                SCAN_ID, SERVICE_ID, COMMIT_HASH, FAILED_TS,
+                ERROR_TYPE, ERROR_MSG, STACK_TRACE, SCANNER_VER_NMBR
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
     private static final String SELECT_BY_SERVICE_AND_COMMIT_SQL = """
-            SELECT FAILURE_ID, SERVICE_ID, GIT_COMMIT_HASH, FAILURE_TIMESTAMP,
-                   GROUP_ID, VERSION, ERROR_TYPE, ERROR_MESSAGE, STACK_TRACE
-            FROM FAILED_SERVICE_SCAN
-            WHERE SERVICE_ID = ? AND GIT_COMMIT_HASH = ?
+            SELECT SCAN_ID, SERVICE_ID, COMMIT_HASH, FAILED_TS,
+                   ERROR_TYPE, ERROR_MSG, STACK_TRACE, SCANNER_VER_NMBR
+            FROM FLOW.FAILED_SERVICE_SCAN
+            WHERE SERVICE_ID = ? AND COMMIT_HASH = ?
             """;
 
     private static final String SELECT_BY_FAILURE_ID_SQL = """
-            SELECT FAILURE_ID, SERVICE_ID, GIT_COMMIT_HASH, FAILURE_TIMESTAMP,
-                   GROUP_ID, VERSION, ERROR_TYPE, ERROR_MESSAGE, STACK_TRACE
-            FROM FAILED_SERVICE_SCAN
-            WHERE FAILURE_ID = ?
+            SELECT SCAN_ID, SERVICE_ID, COMMIT_HASH, FAILED_TS,
+                   ERROR_TYPE, ERROR_MSG, STACK_TRACE, SCANNER_VER_NMBR
+            FROM FLOW.FAILED_SERVICE_SCAN
+            WHERE SCAN_ID = ?
             """;
 
     private static final String EXISTS_BY_SERVICE_AND_COMMIT_SQL = """
-            SELECT 1 FROM FAILED_SERVICE_SCAN
-            WHERE SERVICE_ID = ? AND GIT_COMMIT_HASH = ?
+            SELECT 1 FROM FLOW.FAILED_SERVICE_SCAN
+            WHERE SERVICE_ID = ? AND COMMIT_HASH = ?
             FETCH FIRST 1 ROWS ONLY
             """;
 
     private static final String DELETE_BY_SERVICE_AND_COMMIT_SQL = """
-            DELETE FROM FAILED_SERVICE_SCAN
-            WHERE SERVICE_ID = ? AND GIT_COMMIT_HASH = ?
+            DELETE FROM FLOW.FAILED_SERVICE_SCAN
+            WHERE SERVICE_ID = ? AND COMMIT_HASH = ?
             """;
 
-    private static final String SELECT_BY_SERVICE_COMMIT_PAIRS_SQL_PREFIX = """
-            SELECT FAILURE_ID, SERVICE_ID, GIT_COMMIT_HASH, FAILURE_TIMESTAMP,
-                   GROUP_ID, VERSION, ERROR_TYPE, ERROR_MESSAGE, STACK_TRACE
-            FROM FAILED_SERVICE_SCAN
-            WHERE (SERVICE_ID, GIT_COMMIT_HASH) IN (
-            """;
+    public FailedServiceScanDAO() {
+        this.scannerVersionNumber = resolveScannerVersionNumber();
+    }
 
     /**
      * Inserts a new failed service scan record into the database.
@@ -84,8 +84,6 @@ public class FailedServiceScanDAO {
             stmt.setString(paramIndex++, record.getServiceId());
             stmt.setString(paramIndex++, record.getGitCommitHash());
             stmt.setTimestamp(paramIndex++, record.getFailureTimestamp());
-            stmt.setString(paramIndex++, record.getGroupId());
-            stmt.setString(paramIndex++, record.getVersion());
             stmt.setString(paramIndex++, record.getErrorType());
             stmt.setString(paramIndex++, record.getErrorMessage());
 
@@ -98,6 +96,8 @@ public class FailedServiceScanDAO {
             } else {
                 stmt.setNull(paramIndex++, java.sql.Types.CLOB);
             }
+            stmt.setInt(paramIndex++, scannerVersionNumber);
+            record.setScannerVersionNumber(scannerVersionNumber);
 
             int rowsAffected = stmt.executeUpdate();
             if (rowsAffected != 1) {
@@ -249,14 +249,13 @@ public class FailedServiceScanDAO {
     private FailedServiceScanRecord mapResultSetToRecord(ResultSet rs) throws SQLException {
         FailedServiceScanRecord record = new FailedServiceScanRecord();
 
-        record.setFailureId(rs.getString("FAILURE_ID"));
+        record.setFailureId(rs.getString("SCAN_ID"));
         record.setServiceId(rs.getString("SERVICE_ID"));
-        record.setGitCommitHash(rs.getString("GIT_COMMIT_HASH"));
-        record.setFailureTimestamp(rs.getTimestamp("FAILURE_TIMESTAMP"));
-        record.setGroupId(rs.getString("GROUP_ID"));
-        record.setVersion(rs.getString("VERSION"));
+        record.setGitCommitHash(rs.getString("COMMIT_HASH"));
+        record.setFailureTimestamp(rs.getTimestamp("FAILED_TS"));
         record.setErrorType(rs.getString("ERROR_TYPE"));
-        record.setErrorMessage(rs.getString("ERROR_MESSAGE"));
+        record.setErrorMessage(rs.getString("ERROR_MSG"));
+        record.setScannerVersionNumber(rs.getInt("SCANNER_VER_NMBR"));
 
         // Handle CLOB
         Clob clob = rs.getClob("STACK_TRACE");
@@ -288,6 +287,17 @@ public class FailedServiceScanDAO {
         }
         if (record.getErrorType() == null || record.getErrorType().isBlank()) {
             throw new IllegalArgumentException("Error type is required");
+        }
+    }
+
+    private int resolveScannerVersionNumber() {
+        try {
+            Config config = ConfigProvider.getConfig();
+            return config.getOptionalValue(SCANNER_VERSION_CONFIG_KEY, Integer.class).orElse(0);
+        } catch (Exception ex) {
+            LOGGER.log(Level.WARNING,
+                    "Unable to read config " + SCANNER_VERSION_CONFIG_KEY + ", defaulting to 0", ex);
+            return 0;
         }
     }
 }

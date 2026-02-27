@@ -1,13 +1,14 @@
 package gov.nystax.nimbus.codesnap.services.processor.dao;
 
 import gov.nystax.nimbus.codesnap.services.processor.domain.ServiceScanRecord;
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
 
 import java.sql.Clob;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -24,38 +25,44 @@ import java.util.logging.Logger;
 public class ServiceScanDAO {
 
     private static final Logger LOGGER = Logger.getLogger(ServiceScanDAO.class.getName());
+    private static final String SCANNER_VERSION_CONFIG_KEY = "codesnap.scanner.version";
+    private final int scannerVersionNumber;
 
     private static final String INSERT_SQL = """
-            INSERT INTO SERVICE_SCAN (
-                SCAN_ID, SERVICE_ID, GIT_COMMIT_HASH, SCAN_TIMESTAMP,
-                IS_UI_SERVICE, GROUP_ID, VERSION, SERVICE_DEPENDENCIES, SCAN_DATA_JSON
+            INSERT INTO FLOW.SERVICE_SCAN (
+                SCAN_ID, SERVICE_ID, COMMIT_HASH, UI_SERVICE_IND, VERSION_TEXT,
+                SERVICE_DEP_TEXT, SCAN_DATA_JSON, SCAN_TS, SCANNER_VER_NMBR
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
     private static final String SELECT_BY_SERVICE_AND_COMMIT_SQL = """
-            SELECT SCAN_ID, SERVICE_ID, GIT_COMMIT_HASH, SCAN_TIMESTAMP,
-                   IS_UI_SERVICE, GROUP_ID, VERSION, SERVICE_DEPENDENCIES, SCAN_DATA_JSON
-            FROM SERVICE_SCAN
-            WHERE SERVICE_ID = ? AND GIT_COMMIT_HASH = ?
+            SELECT SCAN_ID, SERVICE_ID, COMMIT_HASH, SCAN_TS,
+                   UI_SERVICE_IND, VERSION_TEXT, SERVICE_DEP_TEXT, SCAN_DATA_JSON, SCANNER_VER_NMBR
+            FROM FLOW.SERVICE_SCAN
+            WHERE SERVICE_ID = ? AND COMMIT_HASH = ?
             """;
 
     private static final String SELECT_BY_SCAN_ID_SQL = """
-            SELECT SCAN_ID, SERVICE_ID, GIT_COMMIT_HASH, SCAN_TIMESTAMP,
-                   IS_UI_SERVICE, GROUP_ID, VERSION, SERVICE_DEPENDENCIES, SCAN_DATA_JSON
-            FROM SERVICE_SCAN
+            SELECT SCAN_ID, SERVICE_ID, COMMIT_HASH, SCAN_TS,
+                   UI_SERVICE_IND, VERSION_TEXT, SERVICE_DEP_TEXT, SCAN_DATA_JSON, SCANNER_VER_NMBR
+            FROM FLOW.SERVICE_SCAN
             WHERE SCAN_ID = ?
             """;
 
     private static final String EXISTS_BY_SERVICE_AND_COMMIT_SQL = """
-            SELECT 1 FROM SERVICE_SCAN
-            WHERE SERVICE_ID = ? AND GIT_COMMIT_HASH = ?
+            SELECT 1 FROM FLOW.SERVICE_SCAN
+            WHERE SERVICE_ID = ? AND COMMIT_HASH = ?
             FETCH FIRST 1 ROWS ONLY
             """;
 
     private static final String DELETE_BY_SERVICE_AND_COMMIT_SQL = """
-            DELETE FROM SERVICE_SCAN
-            WHERE SERVICE_ID = ? AND GIT_COMMIT_HASH = ?
+            DELETE FROM FLOW.SERVICE_SCAN
+            WHERE SERVICE_ID = ? AND COMMIT_HASH = ?
             """;
+
+    public ServiceScanDAO() {
+        this.scannerVersionNumber = resolveScannerVersionNumber();
+    }
 
     /**
      * Inserts a new service scan record into the database.
@@ -76,9 +83,7 @@ public class ServiceScanDAO {
             stmt.setString(paramIndex++, record.getScanId());
             stmt.setString(paramIndex++, record.getServiceId());
             stmt.setString(paramIndex++, record.getGitCommitHash());
-            stmt.setTimestamp(paramIndex++, record.getScanTimestamp());
             stmt.setString(paramIndex++, record.getIsUiServiceDbValue());
-            stmt.setString(paramIndex++, record.getGroupId());
             stmt.setString(paramIndex++, record.getVersion());
             stmt.setString(paramIndex++, record.getServiceDependencies());
 
@@ -91,6 +96,9 @@ public class ServiceScanDAO {
             } else {
                 stmt.setNull(paramIndex++, java.sql.Types.CLOB);
             }
+            stmt.setTimestamp(paramIndex++, record.getScanTimestamp());
+            stmt.setInt(paramIndex++, scannerVersionNumber);
+            record.setScannerVersionNumber(scannerVersionNumber);
 
             int rowsAffected = stmt.executeUpdate();
             if (rowsAffected != 1) {
@@ -248,12 +256,12 @@ public class ServiceScanDAO {
 
         record.setScanId(rs.getString("SCAN_ID"));
         record.setServiceId(rs.getString("SERVICE_ID"));
-        record.setGitCommitHash(rs.getString("GIT_COMMIT_HASH"));
-        record.setScanTimestamp(rs.getTimestamp("SCAN_TIMESTAMP"));
-        record.setIsUiServiceFromDbValue(rs.getString("IS_UI_SERVICE"));
-        record.setGroupId(rs.getString("GROUP_ID"));
-        record.setVersion(rs.getString("VERSION"));
-        record.setServiceDependencies(rs.getString("SERVICE_DEPENDENCIES"));
+        record.setGitCommitHash(rs.getString("COMMIT_HASH"));
+        record.setScanTimestamp(rs.getTimestamp("SCAN_TS"));
+        record.setIsUiServiceFromDbValue(rs.getString("UI_SERVICE_IND"));
+        record.setVersion(rs.getString("VERSION_TEXT"));
+        record.setServiceDependencies(rs.getString("SERVICE_DEP_TEXT"));
+        record.setScannerVersionNumber(rs.getInt("SCANNER_VER_NMBR"));
 
         // Handle CLOB
         Clob clob = rs.getClob("SCAN_DATA_JSON");
@@ -282,6 +290,20 @@ public class ServiceScanDAO {
         }
         if (record.getScanTimestamp() == null) {
             throw new IllegalArgumentException("Scan timestamp is required");
+        }
+        if (record.getVersion() == null || record.getVersion().isBlank()) {
+            throw new IllegalArgumentException("Version is required");
+        }
+    }
+
+    private int resolveScannerVersionNumber() {
+        try {
+            Config config = ConfigProvider.getConfig();
+            return config.getOptionalValue(SCANNER_VERSION_CONFIG_KEY, Integer.class).orElse(0);
+        } catch (Exception ex) {
+            LOGGER.log(Level.WARNING,
+                    "Unable to read config " + SCANNER_VERSION_CONFIG_KEY + ", defaulting to 0", ex);
+            return 0;
         }
     }
 
