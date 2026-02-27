@@ -7,7 +7,6 @@ import gov.nystax.nimbus.codesnap.services.processor.domain.ScanData;
 import gov.nystax.nimbus.codesnap.services.processor.domain.ServiceCallReference;
 import gov.nystax.nimbus.codesnap.services.processor.ServiceScanService.ScanDataWithMetadata;
 
-import java.sql.Connection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -89,41 +88,36 @@ public class TransitiveResolver {
     /**
      * Resolves a service call transitively and adds all leaf dependencies to the function pool entry.
      *
-     * @param connection the database connection (for queue name resolution)
      * @param serviceCall the service call to resolve
      * @param targetEntry the function pool entry to add dependencies to
      */
-    public void resolveServiceCall(Connection connection,
-                                    ServiceCallReference serviceCall,
+    public void resolveServiceCall(ServiceCallReference serviceCall,
                                     FunctionPoolEntry targetEntry) {
-        resolveServiceCallRecursive(connection, serviceCall.getServiceId(), 
+        resolveServiceCallRecursive(serviceCall.getServiceId(),
                 serviceCall.getInterfaceMethod(), targetEntry, new HashSet<>());
     }
 
     /**
      * Resolves multiple service calls and adds all leaf dependencies to the function pool entry.
      *
-     * @param connection the database connection
      * @param serviceCalls list of service calls to resolve
      * @param targetEntry the function pool entry to add dependencies to
      */
-    public void resolveServiceCalls(Connection connection,
-                                     List<ServiceCallReference> serviceCalls,
+    public void resolveServiceCalls(List<ServiceCallReference> serviceCalls,
                                      FunctionPoolEntry targetEntry) {
         if (serviceCalls == null || serviceCalls.isEmpty()) {
             return;
         }
 
         for (ServiceCallReference serviceCall : serviceCalls) {
-            resolveServiceCall(connection, serviceCall, targetEntry);
+            resolveServiceCall(serviceCall, targetEntry);
         }
     }
 
     /**
      * Recursive helper for transitive resolution with cycle detection.
      */
-    private void resolveServiceCallRecursive(Connection connection,
-                                              String serviceId,
+    private void resolveServiceCallRecursive(String serviceId,
                                               String interfaceMethod,
                                               FunctionPoolEntry targetEntry,
                                               Set<String> visited) {
@@ -211,7 +205,7 @@ public class TransitiveResolver {
         List<ServiceCallReference> serviceCalls = deps.getServiceCalls();
         if (serviceCalls != null) {
             for (ServiceCallReference nestedCall : serviceCalls) {
-                resolveServiceCallRecursive(connection, nestedCall.getServiceId(),
+                resolveServiceCallRecursive(nestedCall.getServiceId(),
                         nestedCall.getInterfaceMethod(), targetEntry, visited);
             }
         }

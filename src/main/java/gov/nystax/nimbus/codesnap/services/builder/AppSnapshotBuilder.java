@@ -153,10 +153,10 @@ public class AppSnapshotBuilder {
 
             if (scanMetadata.isUiService()) {
                 // Process UI service
-                processUiService(connection, serviceId, scanData, appRoot, transitiveResolver);
+                processUiService(serviceId, scanData, appRoot, transitiveResolver);
             } else {
                 // Process regular service
-                processRegularService(connection, serviceId, scanData, appRoot, result,
+                processRegularService(serviceId, scanData, appRoot, result,
                         transitiveResolver, addedFunctions, appName);
             }
         }
@@ -187,8 +187,7 @@ public class AppSnapshotBuilder {
     /**
      * Processes a regular service: adds functions to the pool and app template.
      */
-    private void processRegularService(Connection connection,
-                                        String serviceId,
+    private void processRegularService(String serviceId,
                                         ScanData scanData,
                                         AppTemplateNode appRoot,
                                         BuildResult result,
@@ -216,7 +215,7 @@ public class AppSnapshotBuilder {
                     entryPointChildren.get(functionName) : null;
 
             if (deps != null) {
-                addDependenciesToPoolEntry(connection, deps, poolEntry, transitiveResolver);
+                addDependenciesToPoolEntry(deps, poolEntry, transitiveResolver);
             }
 
             // Add function ref to app template (only once)
@@ -234,8 +233,7 @@ public class AppSnapshotBuilder {
     /**
      * Processes a UI service: adds UI service container and methods to app template.
      */
-    private void processUiService(Connection connection,
-                                   String serviceId,
+    private void processUiService(String serviceId,
                                    ScanData scanData,
                                    AppTemplateNode appRoot,
                                    TransitiveResolver transitiveResolver) {
@@ -260,7 +258,7 @@ public class AppSnapshotBuilder {
 
             if (deps != null) {
                 // Add direct function refs to the method node
-                addDependenciesToMethodNode(connection, deps, methodNode, transitiveResolver);
+                addDependenciesToMethodNode(deps, methodNode, transitiveResolver);
             }
 
             uiServicesNode.addChild(methodNode);
@@ -275,8 +273,7 @@ public class AppSnapshotBuilder {
     /**
      * Adds dependencies to a function pool entry, including transitive resolution of service calls.
      */
-    private void addDependenciesToPoolEntry(Connection connection,
-                                             EntryPointDependencies deps,
+    private void addDependenciesToPoolEntry(EntryPointDependencies deps,
                                              FunctionPoolEntry poolEntry,
                                              TransitiveResolver transitiveResolver) {
         // Add sync function dependencies
@@ -340,15 +337,14 @@ public class AppSnapshotBuilder {
         // Resolve service calls transitively
         List<ServiceCallReference> serviceCalls = deps.getServiceCalls();
         if (serviceCalls != null && !serviceCalls.isEmpty()) {
-            transitiveResolver.resolveServiceCalls(connection, serviceCalls, poolEntry);
+            transitiveResolver.resolveServiceCalls(serviceCalls, poolEntry);
         }
     }
 
     /**
      * Adds dependencies to a UI service method node as children in the app template tree.
      */
-    private void addDependenciesToMethodNode(Connection connection,
-                                              EntryPointDependencies deps,
+    private void addDependenciesToMethodNode(EntryPointDependencies deps,
                                               AppTemplateNode methodNode,
                                               TransitiveResolver transitiveResolver) {
         // Add sync function refs
@@ -404,7 +400,7 @@ public class AppSnapshotBuilder {
         if (serviceCalls != null && !serviceCalls.isEmpty()) {
             // Create a temporary pool entry to collect transitive dependencies
             FunctionPoolEntry transitiveCollector = new FunctionPoolEntry();
-            transitiveResolver.resolveServiceCalls(connection, serviceCalls, transitiveCollector);
+            transitiveResolver.resolveServiceCalls(serviceCalls, transitiveCollector);
 
             // Add collected dependencies to the method node
             for (var child : transitiveCollector.getChildren()) {

@@ -23,6 +23,7 @@
         <!-- Dependency versions -->
         <jackson.version>2.17.0</jackson.version>
         <junit.version>5.10.2</junit.version>
+        <caffeine.version>3.2.3</caffeine.version>
     </properties>
 
     <dependencies>
@@ -43,6 +44,12 @@
             <artifactId>geronimo-config-impl</artifactId>
             <version>1.2.3</version>
             <scope>provided</scope>
+        </dependency>
+        <!-- Caffeine for thread-safe caching -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+            <version>${caffeine.version}</version>
         </dependency>
 
         <!-- Testing -->

@@ -14,11 +14,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -45,8 +46,8 @@ public class QueueNameResolver {
     private final URI functionResolverEndpoint;
     private final URI topicResolverEndpoint;
 
-    private final Map<String, String> functionQueueCache;
-    private final Map<String, String> topicQueueCache;
+    private final Cache<String, String> functionQueueCache;
+    private final Cache<String, String> topicQueueCache;
 
     public QueueNameResolver() {
         Config config = ConfigProvider.getConfig();
@@ -69,8 +70,8 @@ public class QueueNameResolver {
                 "codesnap.queue.function.resolver.url");
         this.topicResolverEndpoint = resolveEndpointFromConfig(config,
                 "codesnap.queue.topic.resolver.url");
-        this.functionQueueCache = new HashMap<>();
-        this.topicQueueCache = new HashMap<>();
+        this.functionQueueCache = Caffeine.newBuilder().maximumSize(500).expireAfterWrite(Duration.ofMinutes(10)).build();
+        this.topicQueueCache = Caffeine.newBuilder().maximumSize(500).expireAfterWrite(Duration.ofMinutes(10)).build();
     }
 
     public QueueNameResolver(HttpClient httpClient, URI functionResolverEndpoint, URI topicResolverEndpoint) {
@@ -78,8 +79,8 @@ public class QueueNameResolver {
         this.objectMapper = new ObjectMapper();
         this.functionResolverEndpoint = functionResolverEndpoint;
         this.topicResolverEndpoint = topicResolverEndpoint;
-        this.functionQueueCache = new HashMap<>();
-        this.topicQueueCache = new HashMap<>();
+        this.functionQueueCache = Caffeine.newBuilder().maximumSize(500).expireAfterWrite(Duration.ofMinutes(10)).build();
+        this.topicQueueCache = Caffeine.newBuilder().maximumSize(500).expireAfterWrite(Duration.ofMinutes(10)).build();
 
         this.defaultQueueSuffix = "_queue";
         this.queuePrefixToRemove = "OCP.DEV.";
@@ -96,8 +97,9 @@ public class QueueNameResolver {
      */
     public String resolveForFunction(String functionName) {
         String cacheKey = normalizeCacheKey(functionName);
-        if (functionQueueCache.containsKey(cacheKey)) {
-            return functionQueueCache.get(cacheKey);
+        String cached = functionQueueCache.getIfPresent(cacheKey);
+        if (cached != null) {
+            return cached;
         }
 
         String queueName = resolveFromEndpointWithRetry(
@@ -120,8 +122,9 @@ public class QueueNameResolver {
      */
     public String resolveForTopic(String topicName) {
         String cacheKey = normalizeCacheKey(topicName);
-        if (topicQueueCache.containsKey(cacheKey)) {
-            return topicQueueCache.get(cacheKey);
+        String cached = topicQueueCache.getIfPresent(cacheKey);
+        if (cached != null) {
+            return cached;
         }
 
         String queueName = resolveFromEndpointWithRetry(
@@ -154,8 +157,8 @@ public class QueueNameResolver {
      * Clears in-memory queue name cache.
      */
     public void clearCache() {
-        functionQueueCache.clear();
-        topicQueueCache.clear();
+        functionQueueCache.invalidateAll();
+        topicQueueCache.invalidateAll();
     }
 
     private Optional<String> resolveFromEndpointWithRetry(URI endpoint,
