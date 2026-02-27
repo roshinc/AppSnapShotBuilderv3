@@ -13,7 +13,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.sql.Connection;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Locale;
@@ -92,11 +91,10 @@ public class QueueNameResolver {
     /**
      * Resolves the queue name for an async function call.
      *
-     * @param connection unused, kept for interface compatibility
      * @param functionName the function name
      * @return resolved queue name, or generated default when unresolved
      */
-    public String resolveForFunction(Connection connection, String functionName) {
+    public String resolveForFunction(String functionName) {
         String cacheKey = normalizeCacheKey(functionName);
         if (functionQueueCache.containsKey(cacheKey)) {
             return functionQueueCache.get(cacheKey);
@@ -117,11 +115,10 @@ public class QueueNameResolver {
     /**
      * Resolves the queue name for a topic publish.
      *
-     * @param connection unused, kept for interface compatibility
      * @param topicName the topic name
      * @return resolved queue name, or generated default when unresolved
      */
-    public String resolveForTopic(Connection connection, String topicName) {
+    public String resolveForTopic(String topicName) {
         String cacheKey = normalizeCacheKey(topicName);
         if (topicQueueCache.containsKey(cacheKey)) {
             return topicQueueCache.get(cacheKey);
@@ -142,15 +139,14 @@ public class QueueNameResolver {
     /**
      * Pre-loads queue names for a batch of functions and topics.
      */
-    public void preloadMappings(Connection connection,
-                                Iterable<String> functionNames,
+    public void preloadMappings(Iterable<String> functionNames,
                                 Iterable<String> topicNames) {
         for (String functionName : functionNames) {
-            resolveForFunction(connection, functionName);
+            resolveForFunction(functionName);
         }
 
         for (String topicName : topicNames) {
-            resolveForTopic(connection, topicName);
+            resolveForTopic(topicName);
         }
     }
 

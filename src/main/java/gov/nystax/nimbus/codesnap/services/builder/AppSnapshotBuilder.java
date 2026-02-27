@@ -207,7 +207,7 @@ public class AppSnapshotBuilder {
             // Add to function pool with app name
             FunctionPoolEntry poolEntry = result.getOrCreateFunction(functionName, appName);
             if (poolEntry.getQueueName() == null || poolEntry.getQueueName().isBlank()) {
-                String queueName = queueNameResolver.resolveForFunction(connection, functionName);
+                String queueName = queueNameResolver.resolveForFunction(functionName);
                 poolEntry.setQueueName(queueName);
             }
 
@@ -294,7 +294,7 @@ public class AppSnapshotBuilder {
         if (asyncFunctions != null) {
             for (String funcName : asyncFunctions) {
                 if (!poolEntry.containsAsyncRef(funcName)) {
-                    String queueName = queueNameResolver.resolveForFunction(connection, funcName);
+                    String queueName = queueNameResolver.resolveForFunction(funcName);
                     poolEntry.addAsyncRef(funcName, queueName);
                 }
             }
@@ -305,7 +305,7 @@ public class AppSnapshotBuilder {
         if (topics != null) {
             for (String topicName : topics) {
                 if (!poolEntry.containsTopicRef(topicName)) {
-                    String queueName = queueNameResolver.resolveForTopic(connection, topicName);
+                    String queueName = queueNameResolver.resolveForTopic(topicName);
                     poolEntry.addTopicRef(topicName, queueName);
                 }
             }
@@ -326,7 +326,7 @@ public class AppSnapshotBuilder {
         if (asyncCtgComponents != null) {
             for (String ctgId : asyncCtgComponents) {
                 if (!poolEntry.containsAsyncCtgRef(ctgId)) {
-                    String queueName = queueNameResolver.resolveForFunction(connection, ctgId);
+                    String queueName = queueNameResolver.resolveForFunction(ctgId);
                     poolEntry.addAsyncCtgRef(ctgId, queueName);
                 }
             }
@@ -363,7 +363,7 @@ public class AppSnapshotBuilder {
         Set<String> asyncFunctions = deps.getAsyncFunctions();
         if (asyncFunctions != null) {
             for (String funcName : asyncFunctions) {
-                String queueName = queueNameResolver.resolveForFunction(connection, funcName);
+                String queueName = queueNameResolver.resolveForFunction(funcName);
                 methodNode.addAsyncFunctionRef(funcName, queueName);
             }
         }
@@ -372,7 +372,7 @@ public class AppSnapshotBuilder {
         Set<String> topics = deps.getTopics();
         if (topics != null) {
             for (String topicName : topics) {
-                String queueName = queueNameResolver.resolveForTopic(connection, topicName);
+                String queueName = queueNameResolver.resolveForTopic(topicName);
                 methodNode.addTopicPublishRef(topicName, queueName);
             }
         }
@@ -389,7 +389,7 @@ public class AppSnapshotBuilder {
         Set<String> asyncCtgComponents = deps.getAsyncCtgComponents();
         if (asyncCtgComponents != null) {
             for (String ctgId : asyncCtgComponents) {
-                String queueName = queueNameResolver.resolveForFunction(connection, ctgId);
+                String queueName = queueNameResolver.resolveForFunction(ctgId);
                 methodNode.addAsyncCtgRef(ctgId, queueName);
             }
         }

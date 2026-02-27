@@ -37,8 +37,8 @@ class QueueNameResolverTest {
                 URI.create("http://resolver.local/topic-queue")
         );
 
-        String first = resolver.resolveForFunction(null, "myFunc");
-        String second = resolver.resolveForFunction(null, "MYFUNC");
+        String first = resolver.resolveForFunction("myFunc");
+        String second = resolver.resolveForFunction("MYFUNC");
 
         assertEquals("FUNC.Q", first);
         assertEquals("FUNC.Q", second);
@@ -59,7 +59,7 @@ class QueueNameResolverTest {
                 URI.create("http://resolver.local/topic-queue")
         );
 
-        String queueName = resolver.resolveForTopic(null, "PaymentPosting");
+        String queueName = resolver.resolveForTopic("PaymentPosting");
 
         assertEquals("TOPIC.Q", queueName);
         assertEquals(1, httpClient.getCallCount());
@@ -81,7 +81,7 @@ class QueueNameResolverTest {
                 URI.create("http://resolver.local/topic-queue")
         );
 
-        String queueName = resolver.resolveForFunction(null, "retryFunc");
+        String queueName = resolver.resolveForFunction("retryFunc");
 
         assertEquals("RETRY.Q", queueName);
         assertEquals(3, httpClient.getCallCount());
@@ -99,7 +99,7 @@ class QueueNameResolverTest {
                 URI.create("http://resolver.local/topic-queue")
         );
 
-        String queueName = resolver.resolveForTopic(null, "UnknownTopic");
+        String queueName = resolver.resolveForTopic("UnknownTopic");
 
         assertEquals("UnknownTopic_queue", queueName);
         assertEquals(1, httpClient.getCallCount());

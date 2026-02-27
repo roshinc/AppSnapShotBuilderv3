@@ -164,7 +164,7 @@ public class TransitiveResolver {
         if (asyncFunctions != null) {
             for (String funcName : asyncFunctions) {
                 if (!targetEntry.containsAsyncRef(funcName)) {
-                    String queueName = queueNameResolver.resolveForFunction(connection, funcName);
+                    String queueName = queueNameResolver.resolveForFunction(funcName);
                     targetEntry.addAsyncRef(funcName, queueName);
                 }
             }
@@ -175,7 +175,7 @@ public class TransitiveResolver {
         if (topics != null) {
             for (String topicName : topics) {
                 if (!targetEntry.containsTopicRef(topicName)) {
-                    String queueName = queueNameResolver.resolveForTopic(connection, topicName);
+                    String queueName = queueNameResolver.resolveForTopic(topicName);
                     targetEntry.addTopicRef(topicName, queueName);
                 }
             }
@@ -196,7 +196,7 @@ public class TransitiveResolver {
         if (asyncCtgComponents != null) {
             for (String ctgId : asyncCtgComponents) {
                 if (!targetEntry.containsAsyncCtgRef(ctgId)) {
-                    String queueName = queueNameResolver.resolveForFunction(connection, ctgId);
+                    String queueName = queueNameResolver.resolveForFunction(ctgId);
                     targetEntry.addAsyncCtgRef(ctgId, queueName);
                 }
             }
