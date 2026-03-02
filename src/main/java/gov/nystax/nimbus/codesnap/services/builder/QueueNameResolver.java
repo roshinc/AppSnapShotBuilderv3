@@ -21,8 +21,8 @@ import java.util.Optional;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Resolves queue names for functions and topics through REST endpoints.
@@ -30,7 +30,7 @@ import java.util.logging.Logger;
  */
 public class QueueNameResolver {
 
-    private static final Logger LOGGER = Logger.getLogger(QueueNameResolver.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(QueueNameResolver.class);
 
     private static final String FUNCTION_QUEUE_NAME_KEY = "async_url";
     private static final String TOPIC_QUEUE_NAME_KEY = "MQ_QUEUE";
@@ -167,9 +167,8 @@ public class QueueNameResolver {
                                                           String queueNameKey,
                                                           HttpMethod httpMethod) {
         if (endpoint == null) {
-            LOGGER.log(Level.FINE,
-                    "No {0} queue resolver endpoint configured for target {1}",
-                    new Object[]{targetType, targetName});
+            LOGGER.debug("No {} queue resolver endpoint configured for target {}",
+                    targetType, targetName);
             return Optional.empty();
         }
 
@@ -218,35 +217,29 @@ public class QueueNameResolver {
                 if (queueName.isPresent()) {
                     return EndpointLookupResult.success(normalizeResolvedQueueName(queueName.get()));
                 }
-                LOGGER.log(Level.WARNING,
-                        "Queue resolver response missing key {0} for {1} {2}",
-                        new Object[]{queueNameKey, targetType, targetName});
+                LOGGER.warn("Queue resolver response missing key {} for {} {}",
+                        queueNameKey, targetType, targetName);
                 return EndpointLookupResult.nonRetryableFailure();
             }
 
             if (statusCode == 429 || statusCode >= 500) {
-                LOGGER.log(Level.WARNING,
-                        "Transient {0} queue resolver status={1} for {2}",
-                        new Object[]{targetType, statusCode, targetName});
+                LOGGER.warn("Transient {} queue resolver status={} for {}",
+                        targetType, statusCode, targetName);
                 return EndpointLookupResult.retryableFailure();
             }
 
-            LOGGER.log(Level.WARNING,
-                    "Non-retryable {0} queue resolver status={1} for {2}",
-                    new Object[]{targetType, statusCode, targetName});
+            LOGGER.warn("Non-retryable {} queue resolver status={} for {}",
+                    targetType, statusCode, targetName);
             return EndpointLookupResult.nonRetryableFailure();
         } catch (IOException e) {
-            LOGGER.log(Level.WARNING,
-                    "Error calling " + targetType + " queue resolver for " + targetName, e);
+            LOGGER.warn("Error calling {} queue resolver for {}", targetType, targetName, e);
             return EndpointLookupResult.retryableFailure();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            LOGGER.log(Level.WARNING,
-                    "Interrupted while calling " + targetType + " queue resolver for " + targetName, e);
+            LOGGER.warn("Interrupted while calling {} queue resolver for {}", targetType, targetName, e);
             return EndpointLookupResult.nonRetryableFailure();
         } catch (URISyntaxException e) {
-            LOGGER.log(Level.WARNING,
-                    "Invalid " + targetType + " queue resolver request URI for " + targetName, e);
+            LOGGER.warn("Invalid {} queue resolver request URI for {}", targetType, targetName, e);
             return EndpointLookupResult.nonRetryableFailure();
         }
     }
@@ -290,7 +283,7 @@ public class QueueNameResolver {
 
             return Optional.of(queueName);
         } catch (IOException e) {
-            LOGGER.log(Level.WARNING, "Invalid JSON from queue resolver endpoint", e);
+            LOGGER.warn("Invalid JSON from queue resolver endpoint", e);
             return Optional.empty();
         }
     }
@@ -300,16 +293,15 @@ public class QueueNameResolver {
         long jitterMs = ThreadLocalRandom.current().nextLong(50L);
         long totalDelayMs = exponentialDelay + jitterMs;
 
-        LOGGER.log(Level.FINE,
-                "Retrying {0} queue resolver for {1} in {2}ms (attempt {3}/{4})",
-                new Object[]{targetType, targetName, totalDelayMs, attempt + 1, maxEndpointAttempts});
+        LOGGER.debug("Retrying {} queue resolver for {} in {}ms (attempt {}/{})",
+                targetType, targetName, totalDelayMs, attempt + 1, maxEndpointAttempts);
 
         try {
             Thread.sleep(totalDelayMs);
             return true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            LOGGER.log(Level.WARNING, "Retry sleep interrupted for " + targetType + " " + targetName, e);
+            LOGGER.warn("Retry sleep interrupted for {} {}", targetType, targetName, e);
             return false;
         }
     }
@@ -323,8 +315,7 @@ public class QueueNameResolver {
         try {
             return URI.create(endpoint.get().trim());
         } catch (IllegalArgumentException e) {
-            LOGGER.log(Level.WARNING,
-                    "Ignoring invalid endpoint URL for " + propertyName + ": " + endpoint.get(), e);
+            LOGGER.warn("Ignoring invalid endpoint URL for {}: {}", propertyName, endpoint.get(), e);
             return null;
         }
     }

@@ -11,8 +11,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
  */
 public class ServiceScanRecordFactory {
 
-    private static final Logger LOGGER = Logger.getLogger(ServiceScanRecordFactory.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(ServiceScanRecordFactory.class);
 
     /**
      * Pattern to extract artifact ID from Maven dependency coordinates.
@@ -71,8 +71,8 @@ public class ServiceScanRecordFactory {
             throw new IllegalArgumentException("Git commit hash cannot be null or blank");
         }
 
-        LOGGER.log(Level.INFO, "Creating ServiceScanRecord for {0} at commit {1}",
-                new Object[]{projectInfo.getArtifactId(), gitCommitHash});
+        LOGGER.info("Creating ServiceScanRecord for {} at commit {}",
+                projectInfo.getArtifactId(), gitCommitHash);
 
         // Process the scan data
         ScanData scanData = scanDataProcessor.process(projectInfo);
@@ -157,7 +157,7 @@ public class ServiceScanRecordFactory {
             return matcher.group(1);
         }
 
-        LOGGER.log(Level.WARNING, "Failed to extract artifact ID from dependency: {0}", dependency);
+        LOGGER.warn("Failed to extract artifact ID from dependency: {}", dependency);
         return null;
     }
 

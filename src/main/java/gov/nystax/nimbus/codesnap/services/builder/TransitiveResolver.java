@@ -11,8 +11,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Handles transitive resolution of service calls.
@@ -29,7 +29,7 @@ import java.util.logging.Logger;
  */
 public class TransitiveResolver {
 
-    private static final Logger LOGGER = Logger.getLogger(TransitiveResolver.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(TransitiveResolver.class);
 
     private final Map<String, ScanDataWithMetadata> scansByServiceId;
     private final QueueNameResolver queueNameResolver;
@@ -81,7 +81,7 @@ public class TransitiveResolver {
             }
         }
 
-        LOGGER.log(Level.INFO, "Built transitive resolution map for {0} services", result.size());
+        LOGGER.info("Built transitive resolution map for {} services", result.size());
         return result;
     }
 
@@ -124,7 +124,7 @@ public class TransitiveResolver {
         // Cycle detection
         String visitKey = serviceId + "::" + interfaceMethod;
         if (visited.contains(visitKey)) {
-            LOGGER.log(Level.WARNING, "Cycle detected in transitive resolution: {0}", visitKey);
+            LOGGER.warn("Cycle detected in transitive resolution: {}", visitKey);
             return;
         }
         visited.add(visitKey);
@@ -132,14 +132,14 @@ public class TransitiveResolver {
         // Get the method dependencies for this service
         Map<String, EntryPointDependencies> serviceMethods = transitiveResolutionMap.get(serviceId);
         if (serviceMethods == null) {
-            LOGGER.log(Level.FINE, "No transitive resolution data for service: {0}", serviceId);
+            LOGGER.debug("No transitive resolution data for service: {}", serviceId);
             return;
         }
 
         EntryPointDependencies deps = serviceMethods.get(interfaceMethod);
         if (deps == null) {
-            LOGGER.log(Level.FINE, "No dependencies found for {0}.{1}", 
-                    new Object[]{serviceId, interfaceMethod});
+            LOGGER.debug("No dependencies found for {}.{}",
+                    serviceId, interfaceMethod);
             return;
         }
 

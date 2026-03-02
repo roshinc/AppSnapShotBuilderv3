@@ -23,8 +23,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Main builder class for creating AppTemplate and FunctionPool from stored scan data.
@@ -46,7 +46,7 @@ import java.util.logging.Logger;
  */
 public class AppSnapshotBuilder {
 
-    private static final Logger LOGGER = Logger.getLogger(AppSnapshotBuilder.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(AppSnapshotBuilder.class);
 
     private final ServiceScanService scanService;
     private final QueueNameResolver queueNameResolver;
@@ -77,8 +77,8 @@ public class AppSnapshotBuilder {
     public BuildResult build(Connection connection, BuildRequest request) throws SQLException {
         request.validate();
 
-        LOGGER.log(Level.INFO, "Starting build for app: {0} with {1} services",
-                new Object[]{request.getAppName(), request.getServices().size()});
+        LOGGER.info("Starting build for app: {} with {} services",
+                request.getAppName(), request.getServices().size());
 
         // Clear queue name cache for fresh build
         queueNameResolver.clearCache();
@@ -92,7 +92,7 @@ public class AppSnapshotBuilder {
         List<FailedServiceInfo> failedServiceInfoList = new ArrayList<>();
 
         if (!failedScans.isEmpty()) {
-            LOGGER.log(Level.WARNING, "Found {0} failed scans among requested services", failedScans.size());
+            LOGGER.warn("Found {} failed scans among requested services", failedScans.size());
             for (FailedServiceScanRecord failure : failedScans) {
                 failedServiceIds.add(failure.getServiceId());
                 failedServiceInfoList.add(new FailedServiceInfo(
@@ -115,7 +115,7 @@ public class AppSnapshotBuilder {
         // Step 2: Load available scans (excluding failed ones)
         Map<String, ScanDataWithMetadata> scansByServiceId;
         if (validServiceCommitPairs.isEmpty()) {
-            LOGGER.log(Level.WARNING, "All services have failed scans, cannot build");
+            LOGGER.warn("All services have failed scans, cannot build");
             scansByServiceId = new HashMap<>();
         } else {
             scansByServiceId = scanService.loadScansForBuild(connection, validServiceCommitPairs);
@@ -123,7 +123,7 @@ public class AppSnapshotBuilder {
 
         // Step 3: Topologically sort services
         List<String> sortedServiceIds = scanService.topologicalSort(scansByServiceId);
-        LOGGER.log(Level.INFO, "Services sorted by dependencies: {0}", sortedServiceIds);
+        LOGGER.info("Services sorted by dependencies: {}", sortedServiceIds);
 
         // Step 4: Create transitive resolver
         TransitiveResolver transitiveResolver = new TransitiveResolver(scansByServiceId, queueNameResolver);
@@ -164,21 +164,17 @@ public class AppSnapshotBuilder {
         result.setAppTemplate(appRoot);
 
         if (result.isComplete()) {
-            LOGGER.log(Level.INFO, "Build completed for app: {0}. Functions: {1}, UI Services: {2}",
-                    new Object[]{
-                            request.getAppName(),
-                            result.getFunctionPool().size(),
-                            countUiServices(appRoot)
-                    });
+            LOGGER.info("Build completed for app: {}. Functions: {}, UI Services: {}",
+                    request.getAppName(),
+                    result.getFunctionPool().size(),
+                    countUiServices(appRoot));
         } else {
-            LOGGER.log(Level.WARNING, "Build completed with warnings for app: {0}. " +
-                            "Functions: {1}, UI Services: {2}, Failed Services: {3}",
-                    new Object[]{
-                            request.getAppName(),
-                            result.getFunctionPool().size(),
-                            countUiServices(appRoot),
-                            result.getFailedServices().size()
-                    });
+            LOGGER.warn("Build completed with warnings for app: {}. " +
+                            "Functions: {}, UI Services: {}, Failed Services: {}",
+                    request.getAppName(),
+                    result.getFunctionPool().size(),
+                    countUiServices(appRoot),
+                    result.getFailedServices().size());
         }
 
         return result;
@@ -196,7 +192,7 @@ public class AppSnapshotBuilder {
                                         String appName) {
         Map<String, String> functionMappings = scanData.getFunctionMappings();
         if (functionMappings == null || functionMappings.isEmpty()) {
-            LOGGER.log(Level.FINE, "Service {0} has no function mappings (dependency-only service)", serviceId);
+            LOGGER.debug("Service {} has no function mappings (dependency-only service)", serviceId);
             return;
         }
 
@@ -226,8 +222,8 @@ public class AppSnapshotBuilder {
             }
         }
 
-        LOGGER.log(Level.FINE, "Processed regular service {0}: {1} functions",
-                new Object[]{serviceId, functionMappings.size()});
+        LOGGER.debug("Processed regular service {}: {} functions",
+                serviceId, functionMappings.size());
     }
 
     /**
@@ -239,7 +235,7 @@ public class AppSnapshotBuilder {
                                    TransitiveResolver transitiveResolver) {
         Map<String, String> uiMethodMappings = scanData.getUiServiceMethodMappings();
         if (uiMethodMappings == null || uiMethodMappings.isEmpty()) {
-            LOGGER.log(Level.FINE, "UI Service {0} has no UI method mappings", serviceId);
+            LOGGER.debug("UI Service {} has no UI method mappings", serviceId);
             return;
         }
 
@@ -266,8 +262,8 @@ public class AppSnapshotBuilder {
 
         appRoot.addChild(uiServicesNode);
 
-        LOGGER.log(Level.FINE, "Processed UI service {0}: {1} methods",
-                new Object[]{serviceId, uiMethodMappings.size()});
+        LOGGER.debug("Processed UI service {}: {} methods",
+                serviceId, uiMethodMappings.size());
     }
 
     /**

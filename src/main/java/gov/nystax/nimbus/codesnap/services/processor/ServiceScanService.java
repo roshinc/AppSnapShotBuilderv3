@@ -25,8 +25,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Service class that orchestrates the scan processing workflow.
@@ -40,7 +40,7 @@ import java.util.logging.Logger;
  */
 public class ServiceScanService {
 
-    private static final Logger LOGGER = Logger.getLogger(ServiceScanService.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(ServiceScanService.class);
     private static final String SCANNER_VERSION_CONFIG_KEY = "codesnap.scanner.version";
 
     private final ServiceScanRecordFactory recordFactory;
@@ -86,16 +86,16 @@ public class ServiceScanService {
     public ServiceScanRecord processAndStore(Connection connection,
                                               ProjectInfo projectInfo,
                                               String gitCommitHash) throws SQLException {
-        LOGGER.log(Level.INFO, "Processing and storing scan for service: {0}, commit: {1}",
-                new Object[]{projectInfo.getArtifactId(), gitCommitHash});
+        LOGGER.info("Processing and storing scan for service: {}, commit: {}",
+                projectInfo.getArtifactId(), gitCommitHash);
 
         // Check if a scan already exists
         boolean exists = serviceScanDAO.existsByServiceAndCommit(
                 connection, projectInfo.getArtifactId(), gitCommitHash);
 
         if (exists) {
-            LOGGER.log(Level.INFO, "Scan already exists for {0}@{1}, replacing",
-                    new Object[]{projectInfo.getArtifactId(), gitCommitHash});
+            LOGGER.info("Scan already exists for {}@{}, replacing",
+                    projectInfo.getArtifactId(), gitCommitHash);
             serviceScanDAO.deleteByServiceAndCommit(
                     connection, projectInfo.getArtifactId(), gitCommitHash);
         }
@@ -103,8 +103,8 @@ public class ServiceScanService {
         // Clear any previous failure record for this service/commit since scan is now successful
         if (failedServiceScanDAO.existsByServiceAndCommit(
                 connection, projectInfo.getArtifactId(), gitCommitHash)) {
-            LOGGER.log(Level.INFO, "Clearing previous failure record for {0}@{1}",
-                    new Object[]{projectInfo.getArtifactId(), gitCommitHash});
+            LOGGER.info("Clearing previous failure record for {}@{}",
+                    projectInfo.getArtifactId(), gitCommitHash);
             failedServiceScanDAO.deleteByServiceAndCommit(
                     connection, projectInfo.getArtifactId(), gitCommitHash);
         }
@@ -136,16 +136,16 @@ public class ServiceScanService {
                                                   String errorType,
                                                   String errorMessage,
                                                   Throwable exception) throws SQLException {
-        LOGGER.log(Level.WARNING, "Recording scan failure for service: {0}, commit: {1}, error: {2}",
-                new Object[]{serviceId, gitCommitHash, errorMessage});
+        LOGGER.warn("Recording scan failure for service: {}, commit: {}, error: {}",
+                serviceId, gitCommitHash, errorMessage);
 
         // Clear any existing successful scan for this service/commit
         serviceScanDAO.deleteByServiceAndCommit(connection, serviceId, gitCommitHash);
 
         // Clear any existing failure record
         if (failedServiceScanDAO.existsByServiceAndCommit(connection, serviceId, gitCommitHash)) {
-            LOGGER.log(Level.INFO, "Failure record already exists for {0}@{1}, replacing",
-                    new Object[]{serviceId, gitCommitHash});
+            LOGGER.info("Failure record already exists for {}@{}, replacing",
+                    serviceId, gitCommitHash);
             failedServiceScanDAO.deleteByServiceAndCommit(connection, serviceId, gitCommitHash);
         }
 
@@ -206,7 +206,7 @@ public class ServiceScanService {
      */
     public List<FailedServiceScanRecord> findFailedScans(Connection connection,
                                                           List<ServiceCommitPair> serviceCommits) throws SQLException {
-        LOGGER.log(Level.INFO, "Checking for failed scans among {0} services", serviceCommits.size());
+        LOGGER.info("Checking for failed scans among {} services", serviceCommits.size());
         return failedServiceScanDAO.findByServiceCommitPairs(connection, serviceCommits);
     }
 
@@ -223,8 +223,8 @@ public class ServiceScanService {
     public boolean clearFailure(Connection connection,
                                  String serviceId,
                                  String gitCommitHash) throws SQLException {
-        LOGGER.log(Level.INFO, "Clearing failure record for service: {0}, commit: {1}",
-                new Object[]{serviceId, gitCommitHash});
+        LOGGER.info("Clearing failure record for service: {}, commit: {}",
+                serviceId, gitCommitHash);
         return failedServiceScanDAO.deleteByServiceAndCommit(connection, serviceId, gitCommitHash);
     }
 
@@ -243,8 +243,7 @@ public class ServiceScanService {
             Config config = ConfigProvider.getConfig();
             return config.getOptionalValue(SCANNER_VERSION_CONFIG_KEY, Integer.class).orElse(0);
         } catch (Exception ex) {
-            LOGGER.log(Level.WARNING,
-                    "Unable to read config " + SCANNER_VERSION_CONFIG_KEY + ", defaulting to 0", ex);
+            LOGGER.warn("Unable to read config {}, defaulting to 0", SCANNER_VERSION_CONFIG_KEY, ex);
             return 0;
         }
     }
@@ -263,7 +262,7 @@ public class ServiceScanService {
             Connection connection,
             List<ServiceCommitPair> serviceCommits) throws SQLException {
 
-        LOGGER.log(Level.INFO, "Loading {0} scans for build", serviceCommits.size());
+        LOGGER.info("Loading {} scans for build", serviceCommits.size());
 
         List<ServiceScanRecord> records = serviceScanDAO.findByServiceCommitPairs(
                 connection, serviceCommits);
@@ -283,7 +282,7 @@ public class ServiceScanService {
         missingKeys.removeAll(foundKeys);
 
         if (!missingKeys.isEmpty()) {
-            LOGGER.log(Level.WARNING, "Missing scans for: {0}", missingKeys);
+            LOGGER.warn("Missing scans for: {}", missingKeys);
             throw new MissingScanException("Missing scans for services: " + missingKeys);
         }
 
@@ -313,7 +312,7 @@ public class ServiceScanService {
      * @throws CyclicDependencyException if a dependency cycle is detected
      */
     public List<String> topologicalSort(Map<String, ScanDataWithMetadata> scansById) {
-        LOGGER.log(Level.FINE, "Performing topological sort on {0} services", scansById.size());
+        LOGGER.debug("Performing topological sort on {} services", scansById.size());
 
         // Build adjacency list (service -> services it depends on)
         Map<String, Set<String>> dependencies = new HashMap<>();
@@ -343,7 +342,7 @@ public class ServiceScanService {
             }
         }
 
-        LOGGER.log(Level.INFO, "Topological sort result: {0}", sorted);
+        LOGGER.info("Topological sort result: {}", sorted);
         return sorted;
     }
 
@@ -432,16 +431,16 @@ public class ServiceScanService {
     public ServiceScanResult findByServiceAndCommit(Connection connection,
                                                      String serviceId,
                                                      String gitCommitHash) throws SQLException {
-        LOGGER.log(Level.FINE, "Finding service scan for {0}@{1}",
-                new Object[]{serviceId, gitCommitHash});
+        LOGGER.debug("Finding service scan for {}@{}",
+                serviceId, gitCommitHash);
 
         // First check for successful scan
         Optional<ServiceScanRecord> successfulScan = serviceScanDAO.findByServiceAndCommit(
                 connection, serviceId, gitCommitHash);
 
         if (successfulScan.isPresent()) {
-            LOGGER.log(Level.FINE, "Found successful scan for {0}@{1}",
-                    new Object[]{serviceId, gitCommitHash});
+            LOGGER.debug("Found successful scan for {}@{}",
+                    serviceId, gitCommitHash);
             return new ServiceScanResult.SuccessfulScan(successfulScan.get());
         }
 
@@ -450,13 +449,13 @@ public class ServiceScanService {
                 connection, serviceId, gitCommitHash);
 
         if (failedScan.isPresent()) {
-            LOGGER.log(Level.FINE, "Found failed scan for {0}@{1}",
-                    new Object[]{serviceId, gitCommitHash});
+            LOGGER.debug("Found failed scan for {}@{}",
+                    serviceId, gitCommitHash);
             return new ServiceScanResult.FailedScan(failedScan.get());
         }
 
-        LOGGER.log(Level.FINE, "No scan found for {0}@{1}",
-                new Object[]{serviceId, gitCommitHash});
+        LOGGER.debug("No scan found for {}@{}",
+                serviceId, gitCommitHash);
         return new ServiceScanResult.NotFound(serviceId, gitCommitHash);
     }
 

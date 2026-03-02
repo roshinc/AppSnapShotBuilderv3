@@ -19,8 +19,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Processor that transforms raw scanner output (ProjectInfo) into pre-processed
@@ -36,7 +36,7 @@ import java.util.logging.Logger;
  */
 public class ScanDataProcessor {
 
-    private static final Logger LOGGER = Logger.getLogger(ScanDataProcessor.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(ScanDataProcessor.class);
 
     private static final String INVOCATION_TYPE_EXECUTE = "execute";
     private static final String INVOCATION_TYPE_EXECUTE_ASYNC = "executeAsync";
@@ -61,7 +61,7 @@ public class ScanDataProcessor {
             throw new IllegalArgumentException("ProjectInfo cannot be null");
         }
 
-        LOGGER.log(Level.INFO, "Processing scan data for service: {0}", projectInfo.getArtifactId());
+        LOGGER.info("Processing scan data for service: {}", projectInfo.getArtifactId());
 
         ScanData scanData = new ScanData();
 
@@ -82,13 +82,11 @@ public class ScanDataProcessor {
         processLegacyGatewayHttpClientInvocations(projectInfo, scanData, implToInterface, interfaceToEntryPoint);
         processCtgUsages(projectInfo, scanData, implToInterface, interfaceToEntryPoint);
 
-        LOGGER.log(Level.INFO, "Completed processing scan data for service: {0}. " +
-                        "Entry points: {1}, Public methods with deps: {2}",
-                new Object[]{
-                        projectInfo.getArtifactId(),
-                        scanData.getEntryPointChildren().size(),
-                        scanData.getPublicMethodDependencies().size()
-                });
+        LOGGER.info("Completed processing scan data for service: {}. " +
+                        "Entry points: {}, Public methods with deps: {}",
+                projectInfo.getArtifactId(),
+                scanData.getEntryPointChildren().size(),
+                scanData.getPublicMethodDependencies().size());
 
         return scanData;
     }
@@ -217,8 +215,8 @@ public class ScanDataProcessor {
                 List<MethodReference> callChain = invocation.getCallChain();
 
                 if (callChain == null || callChain.isEmpty()) {
-                    LOGGER.log(Level.WARNING, "Function usage {0} has empty call chain at {1}",
-                            new Object[]{functionId, invocation.getInvocationSite()});
+                    LOGGER.warn("Function usage {} has empty call chain at {}",
+                            functionId, invocation.getInvocationSite());
                     continue;
                 }
 
@@ -286,8 +284,8 @@ public class ScanDataProcessor {
                 List<MethodReference> callChain = invocation.getCallChain();
 
                 if (callChain == null || callChain.isEmpty()) {
-                    LOGGER.log(Level.WARNING, "Service usage {0}.{1} has empty call chain at {2}",
-                            new Object[]{targetServiceId, invokedMethod, invocation.getInvocationSite()});
+                    LOGGER.warn("Service usage {}.{} has empty call chain at {}",
+                            targetServiceId, invokedMethod, invocation.getInvocationSite());
                     continue;
                 }
 
@@ -343,15 +341,15 @@ public class ScanDataProcessor {
                 // For UNKNOWN_VARIABLE and UNKNOWN_COMPLEX, use a placeholder topic name
                 // The invocation is still significant for owner detection and should appear in the tree
                 topic = UNKNOWN_TOPIC_PLACEHOLDER;
-                LOGGER.log(Level.FINE, "Using placeholder for unresolved topic at {0}: resolution={1}",
-                        new Object[]{invocation.getInvocationSite(), invocation.getTopicResolution()});
+                LOGGER.debug("Using placeholder for unresolved topic at {}: resolution={}",
+                        invocation.getInvocationSite(), invocation.getTopicResolution());
             }
 
             List<MethodReference> callChain = invocation.getCallChain();
 
             if (callChain == null || callChain.isEmpty()) {
-                LOGGER.log(Level.WARNING, "Event publisher invocation for topic {0} has empty call chain at {1}",
-                        new Object[]{topic, invocation.getInvocationSite()});
+                LOGGER.warn("Event publisher invocation for topic {} has empty call chain at {}",
+                        topic, invocation.getInvocationSite());
                 continue;
             }
 
@@ -402,7 +400,7 @@ public class ScanDataProcessor {
             List<MethodReference> callChain = invocation.getCallChain();
 
             if (callChain == null || callChain.isEmpty()) {
-                LOGGER.log(Level.WARNING, "Legacy gateway HTTP client invocation has empty call chain at {0}",
+                LOGGER.warn("Legacy gateway HTTP client invocation has empty call chain at {}",
                         invocation.getInvocationSite());
                 continue;
             }
@@ -463,8 +461,8 @@ public class ScanDataProcessor {
                 List<MethodReference> callChain = invocation.getCallChain();
 
                 if (callChain == null || callChain.isEmpty()) {
-                    LOGGER.log(Level.WARNING, "CTG usage {0} has empty call chain at {1}",
-                            new Object[]{ctgComponentId, invocation.getInvocationSite()});
+                    LOGGER.warn("CTG usage {} has empty call chain at {}",
+                            ctgComponentId, invocation.getInvocationSite());
                     continue;
                 }
 

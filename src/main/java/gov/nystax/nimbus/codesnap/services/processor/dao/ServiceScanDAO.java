@@ -10,8 +10,8 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Data Access Object for SERVICE_SCAN table operations.
@@ -22,7 +22,7 @@ import java.util.logging.Logger;
  */
 public class ServiceScanDAO {
 
-    private static final Logger LOGGER = Logger.getLogger(ServiceScanDAO.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(ServiceScanDAO.class);
 
     private static final String INSERT_SQL = """
             INSERT INTO FLOW.SERVICE_SCAN (
@@ -68,8 +68,8 @@ public class ServiceScanDAO {
     public void insert(Connection connection, ServiceScanRecord record, int scannerVersionNumber) throws SQLException {
         validateRecord(record);
 
-        LOGGER.log(Level.FINE, "Inserting ServiceScanRecord: serviceId={0}, gitCommitHash={1}",
-                new Object[]{record.getServiceId(), record.getGitCommitHash()});
+        LOGGER.debug("Inserting ServiceScanRecord: serviceId={}, gitCommitHash={}",
+                record.getServiceId(), record.getGitCommitHash());
 
         try (PreparedStatement stmt = connection.prepareStatement(INSERT_SQL)) {
             int paramIndex = 1;
@@ -98,7 +98,7 @@ public class ServiceScanDAO {
                 throw new SQLException("Expected 1 row affected, but got " + rowsAffected);
             }
 
-            LOGGER.log(Level.INFO, "Successfully inserted ServiceScanRecord: scanId={0}",
+            LOGGER.info("Successfully inserted ServiceScanRecord: scanId={}",
                     record.getScanId());
         }
     }
@@ -115,8 +115,8 @@ public class ServiceScanDAO {
     public Optional<ServiceScanRecord> findByServiceAndCommit(Connection connection,
                                                                String serviceId,
                                                                String gitCommitHash) throws SQLException {
-        LOGGER.log(Level.FINE, "Finding ServiceScanRecord: serviceId={0}, gitCommitHash={1}",
-                new Object[]{serviceId, gitCommitHash});
+        LOGGER.debug("Finding ServiceScanRecord: serviceId={}, gitCommitHash={}",
+                serviceId, gitCommitHash);
 
         try (PreparedStatement stmt = connection.prepareStatement(SELECT_BY_SERVICE_AND_COMMIT_SQL)) {
             stmt.setString(1, serviceId);
@@ -140,7 +140,7 @@ public class ServiceScanDAO {
      * @throws SQLException if a database error occurs
      */
     public Optional<ServiceScanRecord> findByScanId(Connection connection, String scanId) throws SQLException {
-        LOGGER.log(Level.FINE, "Finding ServiceScanRecord by scanId={0}", scanId);
+        LOGGER.debug("Finding ServiceScanRecord by scanId={}", scanId);
 
         try (PreparedStatement stmt = connection.prepareStatement(SELECT_BY_SCAN_ID_SQL)) {
             stmt.setString(1, scanId);
@@ -169,7 +169,7 @@ public class ServiceScanDAO {
             return new ArrayList<>();
         }
 
-        LOGGER.log(Level.INFO, "Finding {0} ServiceScanRecords by service/commit pairs",
+        LOGGER.info("Finding {} ServiceScanRecords by service/commit pairs",
                 serviceCommitPairs.size());
 
         // Build dynamic IN clause for composite key lookup
@@ -184,8 +184,8 @@ public class ServiceScanDAO {
             record.ifPresent(results::add);
         }
 
-        LOGGER.log(Level.INFO, "Found {0} of {1} requested ServiceScanRecords",
-                new Object[]{results.size(), serviceCommitPairs.size()});
+        LOGGER.info("Found {} of {} requested ServiceScanRecords",
+                results.size(), serviceCommitPairs.size());
 
         return results;
     }
@@ -225,8 +225,8 @@ public class ServiceScanDAO {
     public boolean deleteByServiceAndCommit(Connection connection,
                                             String serviceId,
                                             String gitCommitHash) throws SQLException {
-        LOGGER.log(Level.FINE, "Deleting ServiceScanRecord: serviceId={0}, gitCommitHash={1}",
-                new Object[]{serviceId, gitCommitHash});
+        LOGGER.debug("Deleting ServiceScanRecord: serviceId={}, gitCommitHash={}",
+                serviceId, gitCommitHash);
 
         try (PreparedStatement stmt = connection.prepareStatement(DELETE_BY_SERVICE_AND_COMMIT_SQL)) {
             stmt.setString(1, serviceId);
@@ -234,8 +234,8 @@ public class ServiceScanDAO {
 
             int rowsAffected = stmt.executeUpdate();
             if (rowsAffected > 0) {
-                LOGGER.log(Level.INFO, "Deleted ServiceScanRecord: serviceId={0}, gitCommitHash={1}",
-                        new Object[]{serviceId, gitCommitHash});
+                LOGGER.info("Deleted ServiceScanRecord: serviceId={}, gitCommitHash={}",
+                        serviceId, gitCommitHash);
             }
             return rowsAffected > 0;
         }

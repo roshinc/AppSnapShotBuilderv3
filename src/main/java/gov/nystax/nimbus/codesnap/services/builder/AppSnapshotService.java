@@ -11,8 +11,8 @@ import gov.nystax.nimbus.codesnap.services.builder.domain.FunctionPoolEntry;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Service class for building app snapshots.
@@ -20,7 +20,7 @@ import java.util.logging.Logger;
  */
 public class AppSnapshotService {
 
-    private static final Logger LOGGER = Logger.getLogger(AppSnapshotService.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(AppSnapshotService.class);
 
     private final AppSnapshotBuilder builder;
     private final ObjectMapper objectMapper;
