@@ -1,5 +1,6 @@
 package gov.nystax.nimbus.codesnap.services.builder;
 
+import gov.nystax.nimbus.codesnap.services.builder.domain.BuildResult;
 import gov.nystax.nimbus.codesnap.services.builder.domain.ChildReference;
 import gov.nystax.nimbus.codesnap.services.builder.domain.FunctionPoolEntry;
 import gov.nystax.nimbus.codesnap.services.processor.domain.EntryPointDependencies;
@@ -33,15 +34,18 @@ public class TransitiveResolver {
 
     private final Map<String, ScanDataWithMetadata> scansByServiceId;
     private final QueueNameResolver queueNameResolver;
+    private final BuildResult buildResult;
 
     // Maps: serviceId -> (interfaceMethod -> dependencies)
     // Built from publicMethodDependencies during initialization
     private final Map<String, Map<String, EntryPointDependencies>> transitiveResolutionMap;
 
     public TransitiveResolver(Map<String, ScanDataWithMetadata> scansByServiceId,
-                               QueueNameResolver queueNameResolver) {
+                               QueueNameResolver queueNameResolver,
+                               BuildResult buildResult) {
         this.scansByServiceId = scansByServiceId;
         this.queueNameResolver = queueNameResolver;
+        this.buildResult = buildResult;
         this.transitiveResolutionMap = buildTransitiveResolutionMap();
     }
 
@@ -179,9 +183,11 @@ public class TransitiveResolver {
         Set<String> ctgComponents = deps.getCtgComponents();
         if (ctgComponents != null) {
             for (String ctgId : ctgComponents) {
-                if (!targetEntry.containsCtgRef(ctgId)) {
+                String ctgKey = ChildReference.ctgKey(ctgId);
+                if (!targetEntry.containsSyncRef(ctgKey)) {
                     targetEntry.addCtgRef(ctgId);
                 }
+                buildResult.getOrCreateCtgEntry(ctgId);
             }
         }
 
@@ -189,9 +195,14 @@ public class TransitiveResolver {
         Set<String> asyncCtgComponents = deps.getAsyncCtgComponents();
         if (asyncCtgComponents != null) {
             for (String ctgId : asyncCtgComponents) {
-                if (!targetEntry.containsAsyncCtgRef(ctgId)) {
+                String ctgKey = ChildReference.ctgKey(ctgId);
+                if (!targetEntry.containsAsyncRef(ctgKey)) {
                     String queueName = queueNameResolver.resolveForFunction(ctgId);
                     targetEntry.addAsyncCtgRef(ctgId, queueName);
+                }
+                FunctionPoolEntry ctgEntry = buildResult.getOrCreateCtgEntry(ctgId);
+                if (ctgEntry.getQueueName() == null || ctgEntry.getQueueName().isBlank()) {
+                    ctgEntry.setQueueName(queueNameResolver.resolveForFunction(ctgId));
                 }
             }
         }

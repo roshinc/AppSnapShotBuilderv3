@@ -42,6 +42,10 @@ public class FunctionPoolEntry {
     @JsonInclude(JsonInclude.Include.NON_DEFAULT)
     private boolean usesLegacyGatewayHttpClient;
 
+    @JsonProperty("ctg")
+    @JsonInclude(JsonInclude.Include.NON_DEFAULT)
+    private boolean ctg;
+
     @JsonProperty("children")
     private List<ChildReference> children;
 
@@ -90,6 +94,14 @@ public class FunctionPoolEntry {
 
     public void setUsesLegacyGatewayHttpClient(boolean usesLegacyGatewayHttpClient) {
         this.usesLegacyGatewayHttpClient = usesLegacyGatewayHttpClient;
+    }
+
+    public boolean isCtg() {
+        return ctg;
+    }
+
+    public void setCtg(boolean ctg) {
+        this.ctg = ctg;
     }
 
     public void addChild(ChildReference child) {
@@ -142,22 +154,6 @@ public class FunctionPoolEntry {
                 .anyMatch(c -> c.isTopicRef() && topicName.equals(c.getTopicName()));
     }
 
-    /**
-     * Checks if this function entry already contains a sync CTG reference.
-     */
-    public boolean containsCtgRef(String ctgComponentId) {
-        return children.stream()
-                .anyMatch(c -> c.isCtgRef() && ctgComponentId.equals(c.getRef()));
-    }
-
-    /**
-     * Checks if this function entry already contains an async CTG reference.
-     */
-    public boolean containsAsyncCtgRef(String ctgComponentId) {
-        return children.stream()
-                .anyMatch(c -> c.isAsyncCtgRef() && ctgComponentId.equals(c.getRef()));
-    }
-
     public List<ChildReference> getChildren() {
         return children == null ? null : new ArrayList<>(children);
     }
@@ -176,6 +172,7 @@ public class FunctionPoolEntry {
         if (o == null || getClass() != o.getClass()) return false;
         FunctionPoolEntry that = (FunctionPoolEntry) o;
         return usesLegacyGatewayHttpClient == that.usesLegacyGatewayHttpClient &&
+                ctg == that.ctg &&
                 Objects.equals(app, that.app) &&
                 Objects.equals(displayName, that.displayName) &&
                 Objects.equals(queueName, that.queueName) &&
@@ -184,7 +181,7 @@ public class FunctionPoolEntry {
 
     @Override
     public int hashCode() {
-        return Objects.hash(app, displayName, queueName, usesLegacyGatewayHttpClient, children);
+        return Objects.hash(app, displayName, queueName, usesLegacyGatewayHttpClient, ctg, children);
     }
 
     @Override
@@ -194,6 +191,7 @@ public class FunctionPoolEntry {
                 ", displayName='" + displayName + '\'' +
                 ", queueName='" + queueName + '\'' +
                 ", usesLegacyGatewayHttpClient=" + usesLegacyGatewayHttpClient +
+                ", ctg=" + ctg +
                 ", children=" + children +
                 '}';
     }

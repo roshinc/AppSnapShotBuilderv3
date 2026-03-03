@@ -754,6 +754,237 @@ class AppSnapshotBuilderTest {
         }
     }
 
+    @Nested
+    @DisplayName("CTG Dependency Tests")
+    class CtgDependencyTests {
+
+        @Test
+        @DisplayName("Should create top-level CTG pool entry for sync CTG dependency")
+        void syncCtgCreatesPoolEntry() throws SQLException {
+            ScanData scanData = new ScanData();
+            scanData.setFunctionMappings(Map.of(
+                    "insertEmployee", "gov.service.IService.insertEmployee(...)"));
+
+            EntryPointDependencies deps = new EntryPointDependencies();
+            deps.addCtgComponent("TZ0001Z");
+            scanData.setEntryPointChildren(Map.of("insertEmployee", deps));
+
+            mockScanService.addScan("SERVICE", "commit1", false, null, scanData);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("test-app");
+            request.addService("SERVICE", "commit1");
+
+            BuildResult result = builder.build(null, request);
+
+            // Verify top-level CTG entry exists
+            assertTrue(result.getFunctionPool().containsKey("ctg_tz0001z"));
+            FunctionPoolEntry ctgEntry = result.getFunctionPool().get("ctg_tz0001z");
+            assertEquals("TZ0001Z", ctgEntry.getDisplayName());
+            assertTrue(ctgEntry.isCtg());
+            assertNull(ctgEntry.getApp());
+
+            // Verify child reference on the function
+            FunctionPoolEntry funcEntry = result.getFunctionPool().get("insertemployee");
+            assertNotNull(funcEntry);
+            assertTrue(funcEntry.containsSyncRef("ctg_tz0001z"));
+
+            // Verify the child reference has ctg flag
+            ChildReference ctgChild = funcEntry.getChildren().stream()
+                    .filter(c -> "ctg_tz0001z".equals(c.getRef()))
+                    .findFirst().orElse(null);
+            assertNotNull(ctgChild);
+            assertTrue(ctgChild.isCtg());
+            assertTrue(ctgChild.isSyncRef());
+        }
+
+        @Test
+        @DisplayName("Should create top-level CTG pool entry for async CTG dependency with queue name")
+        void asyncCtgCreatesPoolEntryWithQueueName() throws SQLException {
+            ScanData scanData = new ScanData();
+            scanData.setFunctionMappings(Map.of(
+                    "processPayment", "gov.service.IService.processPayment(...)"));
+
+            EntryPointDependencies deps = new EntryPointDependencies();
+            deps.addAsyncCtgComponent("TZ0002Z");
+            scanData.setEntryPointChildren(Map.of("processPayment", deps));
+
+            mockScanService.addScan("SERVICE", "commit1", false, null, scanData);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("test-app");
+            request.addService("SERVICE", "commit1");
+
+            BuildResult result = builder.build(null, request);
+
+            // Verify top-level CTG entry
+            assertTrue(result.getFunctionPool().containsKey("ctg_tz0002z"));
+            FunctionPoolEntry ctgEntry = result.getFunctionPool().get("ctg_tz0002z");
+            assertEquals("TZ0002Z", ctgEntry.getDisplayName());
+            assertTrue(ctgEntry.isCtg());
+            assertEquals("TZ0002Z_queue", ctgEntry.getQueueName());
+
+            // Verify child reference
+            FunctionPoolEntry funcEntry = result.getFunctionPool().get("processpayment");
+            assertTrue(funcEntry.containsAsyncRef("ctg_tz0002z"));
+
+            ChildReference asyncCtgChild = funcEntry.getChildren().stream()
+                    .filter(c -> "ctg_tz0002z".equals(c.getRef()))
+                    .findFirst().orElse(null);
+            assertNotNull(asyncCtgChild);
+            assertTrue(asyncCtgChild.isCtg());
+            assertTrue(asyncCtgChild.isAsyncRef());
+            assertEquals("TZ0002Z_queue", asyncCtgChild.getQueueName());
+        }
+
+        @Test
+        @DisplayName("Should resolve CTG dependencies transitively through service calls")
+        void transitiveCtgResolution() throws SQLException {
+            // Service A calls Service B, Service B has CTG dep
+            ScanData scanDataA = new ScanData();
+            scanDataA.setFunctionMappings(Map.of(
+                    "funcA", "gov.a.IA.funcA(...)"));
+            EntryPointDependencies depsA = new EntryPointDependencies();
+            depsA.addServiceCall("SERVICE_B", "gov.b.IB.funcB(...)");
+            scanDataA.setEntryPointChildren(Map.of("funcA", depsA));
+
+            ScanData scanDataB = new ScanData();
+            scanDataB.setFunctionMappings(new HashMap<>());
+            scanDataB.setMethodImplementationMapping(Map.of(
+                    "gov.b.IB.funcB(...)", "gov.b.impl.BImpl.funcB(...)"));
+            EntryPointDependencies publicDepsB = new EntryPointDependencies();
+            publicDepsB.addCtgComponent("TZ0003Z");
+            scanDataB.setPublicMethodDependencies(Map.of(
+                    "gov.b.impl.BImpl.funcB(...)", publicDepsB));
+
+            mockScanService.addScan("SERVICE_A", "a1", false, "SERVICE_B", scanDataA);
+            mockScanService.addScan("SERVICE_B", "b1", false, null, scanDataB);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("test-app");
+            request.addService("SERVICE_A", "a1");
+            request.addService("SERVICE_B", "b1");
+
+            BuildResult result = builder.build(null, request);
+
+            // funcA should have CTG ref from transitive resolution
+            FunctionPoolEntry entryA = result.getFunctionPool().get("funca");
+            assertTrue(entryA.containsSyncRef("ctg_tz0003z"));
+
+            // Top-level CTG entry should exist
+            assertTrue(result.getFunctionPool().containsKey("ctg_tz0003z"));
+            assertEquals("TZ0003Z", result.getFunctionPool().get("ctg_tz0003z").getDisplayName());
+            assertTrue(result.getFunctionPool().get("ctg_tz0003z").isCtg());
+        }
+
+        @Test
+        @DisplayName("Should add CTG refs to UI service method nodes and create pool entries")
+        void uiServiceWithCtgDeps() throws SQLException {
+            ScanData scanData = new ScanData();
+            Map<String, String> uiMethodMappings = new HashMap<>();
+            uiMethodMappings.put("retrieveData", "gov.ui.IUI.retrieveData(...)");
+            scanData.setUiServiceMethodMappings(uiMethodMappings);
+
+            EntryPointDependencies deps = new EntryPointDependencies();
+            deps.addCtgComponent("TZ0004Z");
+            scanData.setEntryPointChildren(Map.of("retrieveData", deps));
+
+            mockScanService.addScan("UISERVICE", "ui1", true, null, scanData);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("ui-ctg-app");
+            request.addService("UISERVICE", "ui1");
+
+            BuildResult result = builder.build(null, request);
+
+            // CTG pool entry should exist
+            assertTrue(result.getFunctionPool().containsKey("ctg_tz0004z"));
+            assertTrue(result.getFunctionPool().get("ctg_tz0004z").isCtg());
+            assertEquals("TZ0004Z", result.getFunctionPool().get("ctg_tz0004z").getDisplayName());
+
+            // UI method node should have CTG ref
+            AppTemplateNode uiServices = result.getAppTemplate().getChildren().get(0);
+            AppTemplateNode methodNode = uiServices.getChildren().get(0);
+            assertTrue(methodNode.getChildren().stream()
+                    .anyMatch(c -> "ctg_tz0004z".equals(c.getRef()) &&
+                            c.getCtg() != null && c.getCtg()));
+        }
+
+        @Test
+        @DisplayName("Should not duplicate CTG pool entries when same CTG referenced by multiple functions")
+        void noDuplicateCtgEntries() throws SQLException {
+            ScanData scanData = new ScanData();
+            scanData.setFunctionMappings(Map.of(
+                    "func1", "gov.service.IService.func1(...)",
+                    "func2", "gov.service.IService.func2(...)"));
+
+            EntryPointDependencies deps1 = new EntryPointDependencies();
+            deps1.addCtgComponent("TZ0001Z");
+            EntryPointDependencies deps2 = new EntryPointDependencies();
+            deps2.addCtgComponent("TZ0001Z");
+
+            Map<String, EntryPointDependencies> entryPointChildren = new HashMap<>();
+            entryPointChildren.put("func1", deps1);
+            entryPointChildren.put("func2", deps2);
+            scanData.setEntryPointChildren(entryPointChildren);
+
+            mockScanService.addScan("SERVICE", "commit1", false, null, scanData);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("test-app");
+            request.addService("SERVICE", "commit1");
+
+            BuildResult result = builder.build(null, request);
+
+            // Only one CTG entry
+            long ctgCount = result.getFunctionPool().entrySet().stream()
+                    .filter(e -> e.getKey().startsWith("ctg_"))
+                    .count();
+            assertEquals(1, ctgCount);
+
+            // Both functions reference it
+            assertTrue(result.getFunctionPool().get("func1").containsSyncRef("ctg_tz0001z"));
+            assertTrue(result.getFunctionPool().get("func2").containsSyncRef("ctg_tz0001z"));
+        }
+
+        @Test
+        @DisplayName("Should handle mixed sync and async CTG dependencies on same function")
+        void mixedSyncAsyncCtgDeps() throws SQLException {
+            ScanData scanData = new ScanData();
+            scanData.setFunctionMappings(Map.of(
+                    "mixedFunc", "gov.service.IService.mixedFunc(...)"));
+
+            EntryPointDependencies deps = new EntryPointDependencies();
+            deps.addCtgComponent("TZ0001Z");
+            deps.addAsyncCtgComponent("TZ0002Z");
+            scanData.setEntryPointChildren(Map.of("mixedFunc", deps));
+
+            mockScanService.addScan("SERVICE", "commit1", false, null, scanData);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("test-app");
+            request.addService("SERVICE", "commit1");
+
+            BuildResult result = builder.build(null, request);
+
+            // Two CTG pool entries
+            assertTrue(result.getFunctionPool().containsKey("ctg_tz0001z"));
+            assertTrue(result.getFunctionPool().containsKey("ctg_tz0002z"));
+
+            FunctionPoolEntry funcEntry = result.getFunctionPool().get("mixedfunc");
+            // Sync CTG ref
+            assertTrue(funcEntry.containsSyncRef("ctg_tz0001z"));
+            // Async CTG ref
+            assertTrue(funcEntry.containsAsyncRef("ctg_tz0002z"));
+
+            // Verify CTG entries have ctg flag
+            assertTrue(result.getFunctionPool().get("ctg_tz0001z").isCtg());
+            assertTrue(result.getFunctionPool().get("ctg_tz0002z").isCtg());
+            // Async CTG entry should have queue name
+            assertEquals("TZ0002Z_queue", result.getFunctionPool().get("ctg_tz0002z").getQueueName());
+        }
+    }
+
     // Mock implementations for testing
 
     private static class MockServiceScanService extends ServiceScanService {

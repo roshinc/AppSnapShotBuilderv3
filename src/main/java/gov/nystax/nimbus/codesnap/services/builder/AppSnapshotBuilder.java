@@ -2,6 +2,7 @@ package gov.nystax.nimbus.codesnap.services.builder;
 
 import gov.nystax.nimbus.codesnap.services.builder.domain.AppTemplateNode;
 import gov.nystax.nimbus.codesnap.services.builder.domain.BuildRequest;
+import gov.nystax.nimbus.codesnap.services.builder.domain.ChildReference;
 import gov.nystax.nimbus.codesnap.services.builder.domain.BuildRequest.ServiceCommitInfo;
 import gov.nystax.nimbus.codesnap.services.builder.domain.BuildResult;
 import gov.nystax.nimbus.codesnap.services.builder.domain.BuildResult.FailedServiceInfo;
@@ -125,11 +126,11 @@ public class AppSnapshotBuilder {
         List<String> sortedServiceIds = scanService.topologicalSort(scansByServiceId);
         LOGGER.info("Services sorted by dependencies: {}", sortedServiceIds);
 
-        // Step 4: Create transitive resolver
-        TransitiveResolver transitiveResolver = new TransitiveResolver(scansByServiceId, queueNameResolver);
-
         // Step 5: Build the result
         BuildResult result = new BuildResult();
+
+        // Step 4: Create transitive resolver (needs result for CTG pool entry creation)
+        TransitiveResolver transitiveResolver = new TransitiveResolver(scansByServiceId, queueNameResolver, result);
 
         // Add failed services information to the result
         for (FailedServiceInfo failedInfo : failedServiceInfoList) {
@@ -153,7 +154,7 @@ public class AppSnapshotBuilder {
 
             if (scanMetadata.isUiService()) {
                 // Process UI service
-                processUiService(serviceId, scanData, appRoot, transitiveResolver);
+                processUiService(serviceId, scanData, appRoot, result, transitiveResolver);
             } else {
                 // Process regular service
                 processRegularService(serviceId, scanData, appRoot, result,
@@ -212,6 +213,7 @@ public class AppSnapshotBuilder {
 
             if (deps != null) {
                 addDependenciesToPoolEntry(deps, poolEntry, transitiveResolver);
+                createCtgPoolEntries(deps, result);
             }
 
             // Add function ref to app template (only once)
@@ -232,6 +234,7 @@ public class AppSnapshotBuilder {
     private void processUiService(String serviceId,
                                    ScanData scanData,
                                    AppTemplateNode appRoot,
+                                   BuildResult result,
                                    TransitiveResolver transitiveResolver) {
         Map<String, String> uiMethodMappings = scanData.getUiServiceMethodMappings();
         if (uiMethodMappings == null || uiMethodMappings.isEmpty()) {
@@ -253,6 +256,8 @@ public class AppSnapshotBuilder {
                     entryPointChildren.get(methodName) : null;
 
             if (deps != null) {
+                // Create CTG pool entries for direct CTG deps
+                createCtgPoolEntries(deps, result);
                 // Add direct function refs to the method node
                 addDependenciesToMethodNode(deps, methodNode, transitiveResolver);
             }
@@ -308,7 +313,8 @@ public class AppSnapshotBuilder {
         Set<String> ctgComponents = deps.getCtgComponents();
         if (ctgComponents != null) {
             for (String ctgId : ctgComponents) {
-                if (!poolEntry.containsCtgRef(ctgId)) {
+                String ctgKey = ChildReference.ctgKey(ctgId);
+                if (!poolEntry.containsSyncRef(ctgKey)) {
                     poolEntry.addCtgRef(ctgId);
                 }
             }
@@ -318,7 +324,8 @@ public class AppSnapshotBuilder {
         Set<String> asyncCtgComponents = deps.getAsyncCtgComponents();
         if (asyncCtgComponents != null) {
             for (String ctgId : asyncCtgComponents) {
-                if (!poolEntry.containsAsyncCtgRef(ctgId)) {
+                String ctgKey = ChildReference.ctgKey(ctgId);
+                if (!poolEntry.containsAsyncRef(ctgKey)) {
                     String queueName = queueNameResolver.resolveForFunction(ctgId);
                     poolEntry.addAsyncCtgRef(ctgId, queueName);
                 }
@@ -400,22 +407,51 @@ public class AppSnapshotBuilder {
 
             // Add collected dependencies to the method node
             for (var child : transitiveCollector.getChildren()) {
-                if (child.isCtgRef()) {
-                    methodNode.addCtgRef(child.getRef());
-                } else if (child.isAsyncCtgRef()) {
-                    methodNode.addAsyncCtgRef(child.getRef(), child.getQueueName());
-                } else if (child.isSyncRef()) {
-                    methodNode.addFunctionRef(child.getRef());
+                if (child.isTopicRef()) {
+                    methodNode.addTopicPublishRef(child.getTopicName(), child.getQueueName());
+                } else if (child.isCtg()) {
+                    // CTG ref - child.getRef() already has the ctg_ prefix from ChildReference factory;
+                    // construct the AppTemplateNode directly to avoid double-prefixing
+                    AppTemplateNode ctgNode = new AppTemplateNode();
+                    ctgNode.setRef(child.getRef());
+                    ctgNode.setCtg(true);
+                    if (child.isAsyncRef()) {
+                        ctgNode.setAsync(true);
+                        ctgNode.setQueueName(child.getQueueName());
+                    }
+                    methodNode.addChild(ctgNode);
                 } else if (child.isAsyncRef()) {
                     methodNode.addAsyncFunctionRef(child.getRef(), child.getQueueName());
-                } else if (child.isTopicRef()) {
-                    methodNode.addTopicPublishRef(child.getTopicName(), child.getQueueName());
+                } else if (child.isSyncRef()) {
+                    methodNode.addFunctionRef(child.getRef());
                 }
             }
 
             // Propagate legacy gateway HTTP client flag from transitive dependencies
             if (transitiveCollector.isUsesLegacyGatewayHttpClient()) {
                 methodNode.setUsesLegacyGatewayHttpClient(true);
+            }
+        }
+    }
+
+    /**
+     * Creates top-level CTG pool entries in the build result for all CTG
+     * components referenced by the given dependencies.
+     */
+    private void createCtgPoolEntries(EntryPointDependencies deps, BuildResult result) {
+        Set<String> ctgComponents = deps.getCtgComponents();
+        if (ctgComponents != null) {
+            for (String ctgId : ctgComponents) {
+                result.getOrCreateCtgEntry(ctgId);
+            }
+        }
+        Set<String> asyncCtgComponents = deps.getAsyncCtgComponents();
+        if (asyncCtgComponents != null) {
+            for (String ctgId : asyncCtgComponents) {
+                FunctionPoolEntry ctgEntry = result.getOrCreateCtgEntry(ctgId);
+                if (ctgEntry.getQueueName() == null || ctgEntry.getQueueName().isBlank()) {
+                    ctgEntry.setQueueName(queueNameResolver.resolveForFunction(ctgId));
+                }
             }
         }
     }

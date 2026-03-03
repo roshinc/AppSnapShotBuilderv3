@@ -96,6 +96,23 @@ public class BuildResult {
     }
 
     /**
+     * Creates a top-level CTG entry in the function pool.
+     * If an entry with this key already exists, returns the existing one.
+     *
+     * @param ctgComponentId the raw CTG component ID (e.g. "TZ0001Z")
+     * @return the CTG pool entry (existing or new)
+     */
+    public FunctionPoolEntry getOrCreateCtgEntry(String ctgComponentId) {
+        String key = ChildReference.ctgKey(ctgComponentId);
+        return functionPool.computeIfAbsent(key, k -> {
+            FunctionPoolEntry entry = new FunctionPoolEntry();
+            entry.setDisplayName(ctgComponentId);
+            entry.setCtg(true);
+            return entry;
+        });
+    }
+
+    /**
      * Checks if the function pool contains a function.
      */
     public boolean hasFunction(String functionName) {
