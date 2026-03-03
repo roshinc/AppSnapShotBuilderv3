@@ -292,8 +292,7 @@ public class AppSnapshotBuilder {
         if (asyncFunctions != null) {
             for (String funcName : asyncFunctions) {
                 if (!poolEntry.containsAsyncRef(funcName)) {
-                    String queueName = queueNameResolver.resolveForFunction(funcName);
-                    poolEntry.addAsyncRef(funcName, queueName);
+                    poolEntry.addAsyncRef(funcName);
                 }
             }
         }
@@ -326,8 +325,7 @@ public class AppSnapshotBuilder {
             for (String ctgId : asyncCtgComponents) {
                 String ctgKey = ChildReference.ctgKey(ctgId);
                 if (!poolEntry.containsAsyncRef(ctgKey)) {
-                    String queueName = queueNameResolver.resolveForFunction(ctgId);
-                    poolEntry.addAsyncCtgRef(ctgId, queueName);
+                    poolEntry.addAsyncCtgRef(ctgId);
                 }
             }
         }
@@ -405,7 +403,9 @@ public class AppSnapshotBuilder {
             FunctionPoolEntry transitiveCollector = new FunctionPoolEntry();
             transitiveResolver.resolveServiceCalls(serviceCalls, transitiveCollector);
 
-            // Add collected dependencies to the method node
+            // Add collected dependencies to the method node.
+            // Async child refs no longer carry queueName (it lives on their top-level pool entry),
+            // so we resolve it from queueNameResolver for the AppTemplateNode which still needs it.
             for (var child : transitiveCollector.getChildren()) {
                 if (child.isTopicRef()) {
                     methodNode.addTopicPublishRef(child.getTopicName(), child.getQueueName());
@@ -417,11 +417,13 @@ public class AppSnapshotBuilder {
                     ctgNode.setCtg(true);
                     if (child.isAsyncRef()) {
                         ctgNode.setAsync(true);
-                        ctgNode.setQueueName(child.getQueueName());
+                        String ctgOriginalId = child.getRef().substring(ChildReference.CTG_PREFIX.length());
+                        ctgNode.setQueueName(queueNameResolver.resolveForFunction(ctgOriginalId));
                     }
                     methodNode.addChild(ctgNode);
                 } else if (child.isAsyncRef()) {
-                    methodNode.addAsyncFunctionRef(child.getRef(), child.getQueueName());
+                    String resolvedQueue = queueNameResolver.resolveForFunction(child.getRef());
+                    methodNode.addAsyncFunctionRef(child.getRef(), resolvedQueue);
                 } else if (child.isSyncRef()) {
                     methodNode.addFunctionRef(child.getRef());
                 }

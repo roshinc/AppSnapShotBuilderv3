@@ -212,7 +212,8 @@ class AppSnapshotBuilderTest {
                     .findFirst()
                     .orElse(null);
             assertNotNull(asyncRef);
-            assertEquals("asyncFunc_queue", asyncRef.getQueueName());
+            assertNull(asyncRef.getQueueName(),
+                    "Async child ref should not carry queueName (available on top-level pool entry)");
         }
 
         @Test
@@ -834,7 +835,8 @@ class AppSnapshotBuilderTest {
             assertNotNull(asyncCtgChild);
             assertTrue(asyncCtgChild.isCtg());
             assertTrue(asyncCtgChild.isAsyncRef());
-            assertEquals("TZ0002Z_queue", asyncCtgChild.getQueueName());
+            assertNull(asyncCtgChild.getQueueName(),
+                    "Async CTG child ref should not carry queueName (available on top-level CTG pool entry)");
         }
 
         @Test

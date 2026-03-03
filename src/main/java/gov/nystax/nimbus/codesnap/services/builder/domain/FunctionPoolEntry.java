@@ -20,7 +20,7 @@ import java.util.Objects;
  *   "queueName": "MYFUNCTION.QUEUE",
  *   "children": [
  *     {"ref": "childFunc1"},
- *     {"ref": "asyncFunc", "async": true, "queueName": "QUEUE.NAME"},
+ *     {"ref": "asyncFunc", "async": true},
  *     {"topicName": "event", "topicPublish": true, "queueName": "TOPIC.Q"}
  *   ]
  * }
@@ -114,8 +114,8 @@ public class FunctionPoolEntry {
         this.children.add(ChildReference.syncRef(functionName));
     }
 
-    public void addAsyncRef(String functionName, String queueName) {
-        this.children.add(ChildReference.asyncRef(functionName, queueName));
+    public void addAsyncRef(String functionName) {
+        this.children.add(ChildReference.asyncRef(functionName));
     }
 
     public void addTopicRef(String topicName, String queueName) {
@@ -126,8 +126,8 @@ public class FunctionPoolEntry {
         this.children.add(ChildReference.ctgRef(ctgComponentId));
     }
 
-    public void addAsyncCtgRef(String ctgComponentId, String queueName) {
-        this.children.add(ChildReference.asyncCtgRef(ctgComponentId, queueName));
+    public void addAsyncCtgRef(String ctgComponentId) {
+        this.children.add(ChildReference.asyncCtgRef(ctgComponentId));
     }
 
     /**

@@ -162,8 +162,7 @@ public class TransitiveResolver {
         if (asyncFunctions != null) {
             for (String funcName : asyncFunctions) {
                 if (!targetEntry.containsAsyncRef(funcName)) {
-                    String queueName = queueNameResolver.resolveForFunction(funcName);
-                    targetEntry.addAsyncRef(funcName, queueName);
+                    targetEntry.addAsyncRef(funcName);
                 }
             }
         }
@@ -197,8 +196,7 @@ public class TransitiveResolver {
             for (String ctgId : asyncCtgComponents) {
                 String ctgKey = ChildReference.ctgKey(ctgId);
                 if (!targetEntry.containsAsyncRef(ctgKey)) {
-                    String queueName = queueNameResolver.resolveForFunction(ctgId);
-                    targetEntry.addAsyncCtgRef(ctgId, queueName);
+                    targetEntry.addAsyncCtgRef(ctgId);
                 }
                 FunctionPoolEntry ctgEntry = buildResult.getOrCreateCtgEntry(ctgId);
                 if (ctgEntry.getQueueName() == null || ctgEntry.getQueueName().isBlank()) {

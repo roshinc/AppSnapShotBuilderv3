@@ -13,10 +13,10 @@ import java.util.Objects;
  * <p>JSON output formats:</p>
  * <ul>
  *   <li>Sync: {"ref": "functionName"}</li>
- *   <li>Async: {"ref": "functionName", "async": true, "queueName": "QUEUE.NAME"}</li>
+ *   <li>Async: {"ref": "functionName", "async": true}</li>
  *   <li>Topic: {"topicName": "eventName", "topicPublish": true, "queueName": "QUEUE.NAME"}</li>
  *   <li>Sync CTG: {"ref": "ctg_tz0001z", "ctg": true}</li>
- *   <li>Async CTG: {"ref": "ctg_tz0001z", "ctg": true, "async": true, "queueName": "QUEUE.NAME"}</li>
+ *   <li>Async CTG: {"ref": "ctg_tz0001z", "ctg": true, "async": true}</li>
  * </ul>
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -40,7 +40,7 @@ public class ChildReference {
     @JsonProperty("ctg")
     private Boolean ctg;
 
-    private static final String CTG_PREFIX = "ctg_";
+    public static final String CTG_PREFIX = "ctg_";
 
     private ChildReference() {
     }
@@ -67,16 +67,15 @@ public class ChildReference {
 
     /**
      * Creates an asynchronous function reference.
+     * The queue name is available on the target function's own top-level pool entry.
      *
      * @param functionName the function name to reference
-     * @param queueName the queue name for async execution
      * @return an async function reference
      */
-    public static ChildReference asyncRef(String functionName, String queueName) {
+    public static ChildReference asyncRef(String functionName) {
         ChildReference ref = new ChildReference();
         ref.ref = functionName;
         ref.async = true;
-        ref.queueName = queueName;
         return ref;
     }
 
@@ -112,17 +111,16 @@ public class ChildReference {
     /**
      * Creates an asynchronous CTG component reference.
      * The ref is stored as the CTG pool key (e.g. "ctg_tz0001z").
+     * The queue name is available on the target CTG's own top-level pool entry.
      *
      * @param ctgComponentId the raw CTG component ID (e.g. "TZ0001Z")
-     * @param queueName the queue name for async execution
      * @return an async CTG reference
      */
-    public static ChildReference asyncCtgRef(String ctgComponentId, String queueName) {
+    public static ChildReference asyncCtgRef(String ctgComponentId) {
         ChildReference ref = new ChildReference();
         ref.ref = ctgKey(ctgComponentId);
         ref.ctg = true;
         ref.async = true;
-        ref.queueName = queueName;
         return ref;
     }
 
@@ -191,7 +189,10 @@ public class ChildReference {
         }
         String prefix = isCtg() ? "Ctg" : "";
         if (isAsyncRef()) {
-            return prefix + "AsyncRef{" + ref + ", queue=" + queueName + "}";
+            if (queueName != null) {
+                return prefix + "AsyncRef{" + ref + ", queue=" + queueName + "}";
+            }
+            return prefix + "AsyncRef{" + ref + "}";
         }
         if (isSyncRef()) {
             return prefix + "SyncRef{" + ref + "}";
