@@ -27,20 +27,22 @@ public class FailedServiceScanDAO {
     private static final String INSERT_SQL = """
             INSERT INTO FLOW.FAILED_SERVICE_SCAN (
                 SCAN_ID, SERVICE_ID, COMMIT_HASH, FAILED_TS,
-                ERROR_TYPE, ERROR_MSG, STACK_TRACE, SCANNER_VER_NMBR
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ERROR_TYPE, ERROR_MSG, STACK_TRACE, SCANNER_VER_NMBR, JENKINS_REQ_IND
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
     private static final String SELECT_BY_SERVICE_AND_COMMIT_SQL = """
             SELECT SCAN_ID, SERVICE_ID, COMMIT_HASH, FAILED_TS,
-                   ERROR_TYPE, ERROR_MSG, STACK_TRACE, SCANNER_VER_NMBR
+                   ERROR_TYPE, ERROR_MSG, STACK_TRACE, SCANNER_VER_NMBR,
+                   JENKINS_REQ_IND
             FROM FLOW.FAILED_SERVICE_SCAN
             WHERE SERVICE_ID = ? AND COMMIT_HASH = ?
             """;
 
     private static final String SELECT_BY_SCAN_ID_SQL = """
             SELECT SCAN_ID, SERVICE_ID, COMMIT_HASH, FAILED_TS,
-                   ERROR_TYPE, ERROR_MSG, STACK_TRACE, SCANNER_VER_NMBR
+                   ERROR_TYPE, ERROR_MSG, STACK_TRACE, SCANNER_VER_NMBR,
+                   JENKINS_REQ_IND
             FROM FLOW.FAILED_SERVICE_SCAN
             WHERE SCAN_ID = ?
             """;
@@ -91,6 +93,7 @@ public class FailedServiceScanDAO {
             }
             stmt.setInt(paramIndex++, scannerVersionNumber);
             record.setScannerVersionNumber(scannerVersionNumber);
+            stmt.setString(paramIndex++, record.getJenkinsRequestDbValue());
 
             int rowsAffected = stmt.executeUpdate();
             if (rowsAffected != 1) {
@@ -249,6 +252,7 @@ public class FailedServiceScanDAO {
         record.setErrorType(rs.getString("ERROR_TYPE"));
         record.setErrorMessage(rs.getString("ERROR_MSG"));
         record.setScannerVersionNumber(rs.getInt("SCANNER_VER_NMBR"));
+        record.setJenkinsRequestFromDbValue(rs.getString("JENKINS_REQ_IND"));
 
         // Handle CLOB
         Clob clob = rs.getClob("STACK_TRACE");

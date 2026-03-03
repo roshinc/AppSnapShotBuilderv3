@@ -27,20 +27,22 @@ public class ServiceScanDAO {
     private static final String INSERT_SQL = """
             INSERT INTO FLOW.SERVICE_SCAN (
                 SCAN_ID, SERVICE_ID, COMMIT_HASH, UI_SERVICE_IND, VERSION_TEXT,
-                SERVICE_DEP_TEXT, SCAN_DATA_JSON, SCAN_TS, SCANNER_VER_NMBR
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                SERVICE_DEP_TEXT, SCAN_DATA_JSON, SCAN_TS, SCANNER_VER_NMBR, JENKINS_REQ_IND
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
     private static final String SELECT_BY_SERVICE_AND_COMMIT_SQL = """
             SELECT SCAN_ID, SERVICE_ID, COMMIT_HASH, SCAN_TS,
-                   UI_SERVICE_IND, VERSION_TEXT, SERVICE_DEP_TEXT, SCAN_DATA_JSON, SCANNER_VER_NMBR
+                   UI_SERVICE_IND, VERSION_TEXT, SERVICE_DEP_TEXT, SCAN_DATA_JSON, SCANNER_VER_NMBR,
+                   JENKINS_REQ_IND
             FROM FLOW.SERVICE_SCAN
             WHERE SERVICE_ID = ? AND COMMIT_HASH = ?
             """;
 
     private static final String SELECT_BY_SCAN_ID_SQL = """
             SELECT SCAN_ID, SERVICE_ID, COMMIT_HASH, SCAN_TS,
-                   UI_SERVICE_IND, VERSION_TEXT, SERVICE_DEP_TEXT, SCAN_DATA_JSON, SCANNER_VER_NMBR
+                   UI_SERVICE_IND, VERSION_TEXT, SERVICE_DEP_TEXT, SCAN_DATA_JSON, SCANNER_VER_NMBR,
+                   JENKINS_REQ_IND
             FROM FLOW.SERVICE_SCAN
             WHERE SCAN_ID = ?
             """;
@@ -92,6 +94,7 @@ public class ServiceScanDAO {
             stmt.setTimestamp(paramIndex++, record.getScanTimestamp());
             stmt.setInt(paramIndex++, scannerVersionNumber);
             record.setScannerVersionNumber(scannerVersionNumber);
+            stmt.setString(paramIndex++, record.getJenkinsRequestDbValue());
 
             int rowsAffected = stmt.executeUpdate();
             if (rowsAffected != 1) {
@@ -255,6 +258,7 @@ public class ServiceScanDAO {
         record.setVersion(rs.getString("VERSION_TEXT"));
         record.setServiceDependencies(rs.getString("SERVICE_DEP_TEXT"));
         record.setScannerVersionNumber(rs.getInt("SCANNER_VER_NMBR"));
+        record.setJenkinsRequestFromDbValue(rs.getString("JENKINS_REQ_IND"));
 
         // Handle CLOB
         Clob clob = rs.getClob("SCAN_DATA_JSON");

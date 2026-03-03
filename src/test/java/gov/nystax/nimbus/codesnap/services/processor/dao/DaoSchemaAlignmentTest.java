@@ -32,6 +32,7 @@ class DaoSchemaAlignmentTest {
         assertTrue(insertSql.contains("VERSION_TEXT"));
         assertTrue(insertSql.contains("SERVICE_DEP_TEXT"));
         assertTrue(insertSql.contains("SCANNER_VER_NMBR"));
+        assertTrue(insertSql.contains("JENKINS_REQ_IND"));
         assertFalse(insertSql.contains("GIT_COMMIT_HASH"));
         assertFalse(insertSql.contains("SCAN_TIMESTAMP"));
         assertFalse(insertSql.contains("IS_UI_SERVICE"));
@@ -52,6 +53,7 @@ class DaoSchemaAlignmentTest {
         assertTrue(insertSql.contains("FAILED_TS"));
         assertTrue(insertSql.contains("ERROR_MSG"));
         assertTrue(insertSql.contains("SCANNER_VER_NMBR"));
+        assertTrue(insertSql.contains("JENKINS_REQ_IND"));
         assertFalse(insertSql.contains("FAILURE_ID"));
         assertFalse(insertSql.contains("GIT_COMMIT_HASH"));
         assertFalse(insertSql.contains("FAILURE_TIMESTAMP"));
@@ -76,6 +78,7 @@ class DaoSchemaAlignmentTest {
         values.put("SERVICE_DEP_TEXT", "A,B");
         values.put("SCANNER_VER_NMBR", 5);
         values.put("SCAN_DATA_JSON", new SerialClob("{\"ok\":true}".toCharArray()));
+        values.put("JENKINS_REQ_IND", "Y");
 
         ServiceScanRecord record = (ServiceScanRecord) invokePrivateMapMethod(
                 dao, "mapResultSetToRecord", createResultSet(values));
@@ -89,6 +92,7 @@ class DaoSchemaAlignmentTest {
         assertEquals("A,B", record.getServiceDependencies());
         assertEquals(5, record.getScannerVersionNumber());
         assertEquals("{\"ok\":true}", record.getScanDataJson());
+        assertTrue(record.isJenkinsRequest());
     }
 
     @Test
@@ -105,6 +109,7 @@ class DaoSchemaAlignmentTest {
         values.put("ERROR_MSG", "failed");
         values.put("SCANNER_VER_NMBR", 9);
         values.put("STACK_TRACE", new SerialClob("stack".toCharArray()));
+        values.put("JENKINS_REQ_IND", "N");
 
         FailedServiceScanRecord record = (FailedServiceScanRecord) invokePrivateMapMethod(
                 dao, "mapResultSetToRecord", createResultSet(values));
@@ -117,6 +122,7 @@ class DaoSchemaAlignmentTest {
         assertEquals("failed", record.getErrorMessage());
         assertEquals(9, record.getScannerVersionNumber());
         assertEquals("stack", record.getStackTrace());
+        assertFalse(record.isJenkinsRequest());
     }
 
     private static String getPrivateStaticString(Class<?> type, String fieldName) throws Exception {

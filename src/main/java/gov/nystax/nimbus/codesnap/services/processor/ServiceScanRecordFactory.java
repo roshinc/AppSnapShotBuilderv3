@@ -60,10 +60,11 @@ public class ServiceScanRecordFactory {
      *
      * @param projectInfo the scanner output
      * @param gitCommitHash the git commit hash of the scanned code
+     * @param jenkinsRequest true if this scan was triggered by a Jenkins request
      * @return a fully populated ServiceScanRecord ready for database insertion
      * @throws ScanDataProcessingException if processing or serialization fails
      */
-    public ServiceScanRecord createRecord(ProjectInfo projectInfo, String gitCommitHash) {
+    public ServiceScanRecord createRecord(ProjectInfo projectInfo, String gitCommitHash, boolean jenkinsRequest) {
         if (projectInfo == null) {
             throw new IllegalArgumentException("ProjectInfo cannot be null");
         }
@@ -93,6 +94,7 @@ public class ServiceScanRecordFactory {
                 .version(projectInfo.getVersion())
                 .serviceDependencies(serviceDependencies)
                 .scanDataJson(scanDataJson)
+                .jenkinsRequest(jenkinsRequest)
                 .build();
     }
 

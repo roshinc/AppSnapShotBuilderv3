@@ -14,6 +14,7 @@ public class ServiceScanRecord {
     private String gitCommitHash;
     private Timestamp scanTimestamp;
     private boolean isUiService;
+    private boolean jenkinsRequest;
     private String version;
     private String serviceDependencies;  // Comma-separated service IDs
     private String scanDataJson;         // CLOB content as String
@@ -69,6 +70,14 @@ public class ServiceScanRecord {
         isUiService = uiService;
     }
 
+    public boolean isJenkinsRequest() {
+        return jenkinsRequest;
+    }
+
+    public void setJenkinsRequest(boolean jenkinsRequest) {
+        this.jenkinsRequest = jenkinsRequest;
+    }
+
     public String getVersion() {
         return version;
     }
@@ -115,12 +124,27 @@ public class ServiceScanRecord {
         this.isUiService = "Y".equalsIgnoreCase(dbValue);
     }
 
+    /**
+     * Returns the JENKINS_REQ_IND column value ('Y' or 'N').
+     */
+    public String getJenkinsRequestDbValue() {
+        return jenkinsRequest ? "Y" : "N";
+    }
+
+    /**
+     * Sets the jenkinsRequest field from the database column value ('Y' or 'N').
+     */
+    public void setJenkinsRequestFromDbValue(String dbValue) {
+        this.jenkinsRequest = "Y".equalsIgnoreCase(dbValue);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ServiceScanRecord that = (ServiceScanRecord) o;
         return isUiService == that.isUiService &&
+                jenkinsRequest == that.jenkinsRequest &&
                 Objects.equals(scanId, that.scanId) &&
                 Objects.equals(serviceId, that.serviceId) &&
                 Objects.equals(gitCommitHash, that.gitCommitHash) &&
@@ -134,7 +158,7 @@ public class ServiceScanRecord {
     @Override
     public int hashCode() {
         return Objects.hash(scanId, serviceId, gitCommitHash, scanTimestamp,
-                isUiService, version, serviceDependencies, scanDataJson, scannerVersionNumber);
+                isUiService, jenkinsRequest, version, serviceDependencies, scanDataJson, scannerVersionNumber);
     }
 
     @Override
@@ -145,6 +169,7 @@ public class ServiceScanRecord {
                 ", gitCommitHash='" + gitCommitHash + '\'' +
                 ", scanTimestamp=" + scanTimestamp +
                 ", isUiService=" + isUiService +
+                ", jenkinsRequest=" + jenkinsRequest +
                 ", version='" + version + '\'' +
                 ", serviceDependencies='" + serviceDependencies + '\'' +
                 ", scannerVersionNumber=" + scannerVersionNumber +
@@ -180,6 +205,11 @@ public class ServiceScanRecord {
 
         public Builder isUiService(boolean isUiService) {
             record.setUiService(isUiService);
+            return this;
+        }
+
+        public Builder jenkinsRequest(boolean jenkinsRequest) {
+            record.setJenkinsRequest(jenkinsRequest);
             return this;
         }
 

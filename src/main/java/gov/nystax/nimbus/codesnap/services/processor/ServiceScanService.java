@@ -86,13 +86,15 @@ public class ServiceScanService {
      * @param connection the database connection (transaction managed by caller)
      * @param projectInfo the scanner output
      * @param gitCommitHash the git commit hash of the scanned code
+     * @param jenkinsRequest true if this scan was triggered by a Jenkins request
      * @return the created ServiceScanRecord
      * @throws SQLException if a database error occurs
      * @throws ServiceScanRecordFactory.ScanDataProcessingException if processing fails
      */
     public ServiceScanRecord processAndStore(Connection connection,
                                               ProjectInfo projectInfo,
-                                              String gitCommitHash) throws SQLException {
+                                              String gitCommitHash,
+                                              boolean jenkinsRequest) throws SQLException {
         LOGGER.info("Processing and storing scan for service: {}, commit: {}",
                 projectInfo.getArtifactId(), gitCommitHash);
 
@@ -117,7 +119,7 @@ public class ServiceScanService {
         }
 
         // Create and store the new record
-        ServiceScanRecord record = recordFactory.createRecord(projectInfo, gitCommitHash);
+        ServiceScanRecord record = recordFactory.createRecord(projectInfo, gitCommitHash, jenkinsRequest);
         serviceScanDAO.insert(connection, record, scannerVersionNumber);
 
         return record;
@@ -134,6 +136,7 @@ public class ServiceScanService {
      * @param errorType the type of error (use constants from FailedServiceScanRecord.ErrorType)
      * @param errorMessage brief error message
      * @param exception the exception that caused the failure (may be null)
+     * @param jenkinsRequest true if this scan was triggered by a Jenkins request
      * @return the created FailedServiceScanRecord
      * @throws SQLException if a database error occurs
      */
@@ -142,7 +145,8 @@ public class ServiceScanService {
                                                   String gitCommitHash,
                                                   String errorType,
                                                   String errorMessage,
-                                                  Throwable exception) throws SQLException {
+                                                  Throwable exception,
+                                                  boolean jenkinsRequest) throws SQLException {
         LOGGER.warn("Recording scan failure for service: {}, commit: {}, error: {}",
                 serviceId, gitCommitHash, errorMessage);
 
@@ -165,6 +169,7 @@ public class ServiceScanService {
                 .errorType(errorType != null ? errorType : FailedServiceScanRecord.ErrorType.UNKNOWN)
                 .errorMessage(errorMessage)
                 .stackTrace(exception != null ? getStackTraceString(exception) : null)
+                .jenkinsRequest(jenkinsRequest)
                 .build();
 
         failedServiceScanDAO.insert(connection, record, scannerVersionNumber);

@@ -25,6 +25,7 @@ public class FailedServiceScanRecord {
     private String errorMessage;   // Brief error message
     private String stackTrace;     // Full stack trace for debugging (CLOB)
     private int scannerVersionNumber;
+    private boolean jenkinsRequest;
 
     public FailedServiceScanRecord() {
     }
@@ -100,12 +101,35 @@ public class FailedServiceScanRecord {
         this.scannerVersionNumber = scannerVersionNumber;
     }
 
+    public boolean isJenkinsRequest() {
+        return jenkinsRequest;
+    }
+
+    public void setJenkinsRequest(boolean jenkinsRequest) {
+        this.jenkinsRequest = jenkinsRequest;
+    }
+
+    /**
+     * Returns the JENKINS_REQ_IND column value ('Y' or 'N').
+     */
+    public String getJenkinsRequestDbValue() {
+        return jenkinsRequest ? "Y" : "N";
+    }
+
+    /**
+     * Sets the jenkinsRequest field from the database column value ('Y' or 'N').
+     */
+    public void setJenkinsRequestFromDbValue(String dbValue) {
+        this.jenkinsRequest = "Y".equalsIgnoreCase(dbValue);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         FailedServiceScanRecord that = (FailedServiceScanRecord) o;
         return scannerVersionNumber == that.scannerVersionNumber &&
+                jenkinsRequest == that.jenkinsRequest &&
                 Objects.equals(scanId, that.scanId) &&
                 Objects.equals(serviceId, that.serviceId) &&
                 Objects.equals(gitCommitHash, that.gitCommitHash) &&
@@ -118,7 +142,7 @@ public class FailedServiceScanRecord {
     @Override
     public int hashCode() {
         return Objects.hash(scanId, serviceId, gitCommitHash, failureTimestamp,
-                errorType, errorMessage, stackTrace, scannerVersionNumber);
+                errorType, errorMessage, stackTrace, scannerVersionNumber, jenkinsRequest);
     }
 
     @Override
@@ -131,6 +155,7 @@ public class FailedServiceScanRecord {
                 ", errorType='" + errorType + '\'' +
                 ", errorMessage='" + errorMessage + '\'' +
                 ", scannerVersionNumber=" + scannerVersionNumber +
+                ", jenkinsRequest=" + jenkinsRequest +
                 ", stackTrace='" + (stackTrace != null ? "[" + stackTrace.length() + " chars]" : "null") + '\'' +
                 '}';
     }
@@ -178,6 +203,11 @@ public class FailedServiceScanRecord {
 
         public Builder scannerVersionNumber(int scannerVersionNumber) {
             record.setScannerVersionNumber(scannerVersionNumber);
+            return this;
+        }
+
+        public Builder jenkinsRequest(boolean jenkinsRequest) {
+            record.setJenkinsRequest(jenkinsRequest);
             return this;
         }
 
