@@ -186,7 +186,10 @@ public class TransitiveResolver {
                 if (!targetEntry.containsSyncRef(ctgKey)) {
                     targetEntry.addCtgRef(ctgId);
                 }
-                buildResult.getOrCreateCtgEntry(ctgId);
+                FunctionPoolEntry ctgEntry = buildResult.getOrCreateCtgEntry(ctgId);
+                if (ctgEntry.getQueueName() == null || ctgEntry.getQueueName().isBlank()) {
+                    ctgEntry.setQueueName(queueNameResolver.resolveForFunction(ctgId));
+                }
             }
         }
 

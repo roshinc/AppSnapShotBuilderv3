@@ -784,6 +784,7 @@ class AppSnapshotBuilderTest {
             assertEquals("TZ0001Z", ctgEntry.getDisplayName());
             assertTrue(ctgEntry.isCtg());
             assertNull(ctgEntry.getApp());
+            assertEquals("TZ0001Z_queue", ctgEntry.getQueueName());
 
             // Verify child reference on the function
             FunctionPoolEntry funcEntry = result.getFunctionPool().get("insertemployee");
@@ -877,6 +878,7 @@ class AppSnapshotBuilderTest {
             assertTrue(result.getFunctionPool().containsKey("ctg_tz0003z"));
             assertEquals("TZ0003Z", result.getFunctionPool().get("ctg_tz0003z").getDisplayName());
             assertTrue(result.getFunctionPool().get("ctg_tz0003z").isCtg());
+            assertEquals("TZ0003Z_queue", result.getFunctionPool().get("ctg_tz0003z").getQueueName());
         }
 
         @Test
@@ -903,6 +905,7 @@ class AppSnapshotBuilderTest {
             assertTrue(result.getFunctionPool().containsKey("ctg_tz0004z"));
             assertTrue(result.getFunctionPool().get("ctg_tz0004z").isCtg());
             assertEquals("TZ0004Z", result.getFunctionPool().get("ctg_tz0004z").getDisplayName());
+            assertEquals("TZ0004Z_queue", result.getFunctionPool().get("ctg_tz0004z").getQueueName());
 
             // UI method node should have CTG ref
             AppTemplateNode uiServices = result.getAppTemplate().getChildren().get(0);
@@ -944,6 +947,9 @@ class AppSnapshotBuilderTest {
                     .count();
             assertEquals(1, ctgCount);
 
+            // Queue name should be resolved
+            assertEquals("TZ0001Z_queue", result.getFunctionPool().get("ctg_tz0001z").getQueueName());
+
             // Both functions reference it
             assertTrue(result.getFunctionPool().get("func1").containsSyncRef("ctg_tz0001z"));
             assertTrue(result.getFunctionPool().get("func2").containsSyncRef("ctg_tz0001z"));
@@ -982,7 +988,8 @@ class AppSnapshotBuilderTest {
             // Verify CTG entries have ctg flag
             assertTrue(result.getFunctionPool().get("ctg_tz0001z").isCtg());
             assertTrue(result.getFunctionPool().get("ctg_tz0002z").isCtg());
-            // Async CTG entry should have queue name
+            // Both CTG entries should have queue names
+            assertEquals("TZ0001Z_queue", result.getFunctionPool().get("ctg_tz0001z").getQueueName());
             assertEquals("TZ0002Z_queue", result.getFunctionPool().get("ctg_tz0002z").getQueueName());
         }
     }

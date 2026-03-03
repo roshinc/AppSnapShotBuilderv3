@@ -444,7 +444,10 @@ public class AppSnapshotBuilder {
         Set<String> ctgComponents = deps.getCtgComponents();
         if (ctgComponents != null) {
             for (String ctgId : ctgComponents) {
-                result.getOrCreateCtgEntry(ctgId);
+                FunctionPoolEntry ctgEntry = result.getOrCreateCtgEntry(ctgId);
+                if (ctgEntry.getQueueName() == null || ctgEntry.getQueueName().isBlank()) {
+                    ctgEntry.setQueueName(queueNameResolver.resolveForFunction(ctgId));
+                }
             }
         }
         Set<String> asyncCtgComponents = deps.getAsyncCtgComponents();
