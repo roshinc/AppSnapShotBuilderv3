@@ -1,6 +1,7 @@
 package gov.nystax.nimbus.codesnap.services.processor;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import gov.nystax.nimbus.codesnap.services.processor.dao.FailedServiceScanDAO;
 import gov.nystax.nimbus.codesnap.services.processor.dao.ServiceScanDAO;
@@ -53,7 +54,7 @@ public class ServiceScanService {
         this.recordFactory = new ServiceScanRecordFactory();
         this.serviceScanDAO = new ServiceScanDAO();
         this.failedServiceScanDAO = new FailedServiceScanDAO();
-        this.objectMapper = new ObjectMapper();
+        this.objectMapper = createObjectMapper();
         this.scannerVersionNumber = resolveScannerVersionNumber();
     }
 
@@ -68,8 +69,14 @@ public class ServiceScanService {
         this.recordFactory = recordFactory;
         this.serviceScanDAO = serviceScanDAO;
         this.failedServiceScanDAO = failedServiceScanDAO;
-        this.objectMapper = objectMapper;
+        this.objectMapper = objectMapper == null ? createObjectMapper() : objectMapper.copy()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         this.scannerVersionNumber = scannerVersionNumber;
+    }
+
+    private static ObjectMapper createObjectMapper() {
+        return new ObjectMapper()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
     /**
