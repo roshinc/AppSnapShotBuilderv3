@@ -1128,6 +1128,32 @@ class AppSnapshotBuilderTest {
             assertEquals(1, result.getFunctionPool().size());
             assertTrue(result.getFunctionPool().containsKey("testfunc"));
         }
+
+        @Test
+        @DisplayName("Should fail when nimba app has no services")
+        void nimbaAppRequiresOneService() {
+            BuildRequest request = new BuildRequest();
+            request.setAppName("nimb-empty-app");
+            request.setAppType(BuildRequest.AppType.NIMBA);
+
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, request::validate);
+
+            assertEquals("Nimba apps must include exactly one service", exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("Should fail when nimba app has multiple services")
+        void nimbaAppRejectsMultipleServices() {
+            BuildRequest request = new BuildRequest();
+            request.setAppName("nimb-multi-app");
+            request.setAppType(BuildRequest.AppType.NIMBA);
+            request.addService("NIMB-MULTI-APP", "commit1");
+            request.addService("NIMB-MULTI-APP-2", "commit2");
+
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, request::validate);
+
+            assertEquals("Nimba apps must include exactly one service", exception.getMessage());
+        }
     }
 
     // Mock implementations for testing

@@ -88,6 +88,9 @@ public class BuildRequest {
         if (appName == null || appName.isBlank()) {
             throw new IllegalArgumentException("App name is required");
         }
+        if (isNimbaApp() && (services == null || services.size() != 1)) {
+            throw new IllegalArgumentException("Nimba apps must include exactly one service");
+        }
         if (services == null || services.isEmpty()) {
             throw new IllegalArgumentException("At least one service is required");
         }
