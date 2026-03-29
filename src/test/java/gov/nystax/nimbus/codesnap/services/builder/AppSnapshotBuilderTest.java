@@ -994,6 +994,142 @@ class AppSnapshotBuilderTest {
         }
     }
 
+    @Nested
+    @DisplayName("Nimba App Tests")
+    class NimbaAppTests {
+
+        @Test
+        @DisplayName("Should promote implicit function children directly under app root and leave function pool empty")
+        void nimbaAppPromotesChildrenToAppRoot() throws SQLException {
+            ScanData scanData = new ScanData();
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("nimb_xyz_app_implicitfunction", "gov.nimba.INimba.implicitFunction(...)");
+            scanData.setFunctionMappings(functionMappings);
+
+            EntryPointDependencies deps = new EntryPointDependencies();
+            deps.addFunction("childFunc1");
+            deps.addFunction("childFunc2");
+            deps.addAsyncFunction("asyncChild1");
+            scanData.setEntryPointChildren(Map.of("nimb_xyz_app_implicitfunction", deps));
+
+            mockScanService.addScan("NIMB-XYZ-APP", "commit1", false, null, scanData);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("nimb-xyz-app");
+            request.setAppType(BuildRequest.AppType.NIMBA);
+            request.addService("NIMB-XYZ-APP", "commit1");
+
+            BuildResult result = builder.build(null, request);
+
+            // Function pool should be empty — nimba apps contribute nothing
+            assertTrue(result.getFunctionPool().isEmpty(),
+                    "Nimba app should not add anything to the function pool");
+
+            // App root should have the implicit function's children directly
+            AppTemplateNode appRoot = result.getAppTemplate();
+            assertEquals("nimb-xyz-app", appRoot.getName());
+            assertNotNull(appRoot.getChildren());
+            assertEquals(3, appRoot.getChildren().size());
+
+            // Verify sync refs
+            assertTrue(appRoot.getChildren().stream()
+                    .anyMatch(c -> "childFunc1".equals(c.getRef()) && c.getAsync() == null));
+            assertTrue(appRoot.getChildren().stream()
+                    .anyMatch(c -> "childFunc2".equals(c.getRef()) && c.getAsync() == null));
+
+            // Verify async ref
+            assertTrue(appRoot.getChildren().stream()
+                    .anyMatch(c -> "asyncChild1".equals(c.getRef()) &&
+                            c.getAsync() != null && c.getAsync()));
+        }
+
+        @Test
+        @DisplayName("Should handle nimba app with no children on implicit function")
+        void nimbaAppNoChildren() throws SQLException {
+            ScanData scanData = new ScanData();
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("nimb_abc_app_implicitfunction", "gov.nimba.INimba.implicitFunction(...)");
+            scanData.setFunctionMappings(functionMappings);
+
+            scanData.setEntryPointChildren(Map.of("nimb_abc_app_implicitfunction", new EntryPointDependencies()));
+
+            mockScanService.addScan("NIMB-ABC-APP", "commit1", false, null, scanData);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("nimb-abc-app");
+            request.setAppType(BuildRequest.AppType.NIMBA);
+            request.addService("NIMB-ABC-APP", "commit1");
+
+            BuildResult result = builder.build(null, request);
+
+            assertTrue(result.getFunctionPool().isEmpty());
+            // App root should have no children
+            AppTemplateNode appRoot = result.getAppTemplate();
+            assertFalse(appRoot.hasChildren() && !appRoot.getChildren().isEmpty(),
+                    "Nimba app with no dependencies should have no children on app root");
+        }
+
+        @Test
+        @DisplayName("Should handle nimba app with topic dependencies")
+        void nimbaAppWithTopicDeps() throws SQLException {
+            ScanData scanData = new ScanData();
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("nimb_evt_app_implicitfunction", "gov.nimba.INimba.implicitFunction(...)");
+            scanData.setFunctionMappings(functionMappings);
+
+            EntryPointDependencies deps = new EntryPointDependencies();
+            deps.addFunction("syncFunc");
+            deps.addTopic("employeeCreated");
+            scanData.setEntryPointChildren(Map.of("nimb_evt_app_implicitfunction", deps));
+
+            mockScanService.addScan("NIMB-EVT-APP", "commit1", false, null, scanData);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("nimb-evt-app");
+            request.setAppType(BuildRequest.AppType.NIMBA);
+            request.addService("NIMB-EVT-APP", "commit1");
+
+            BuildResult result = builder.build(null, request);
+
+            assertTrue(result.getFunctionPool().isEmpty());
+
+            AppTemplateNode appRoot = result.getAppTemplate();
+            assertEquals(2, appRoot.getChildren().size());
+
+            // Verify sync function ref
+            assertTrue(appRoot.getChildren().stream()
+                    .anyMatch(c -> "syncFunc".equals(c.getRef())));
+
+            // Verify topic publish ref
+            assertTrue(appRoot.getChildren().stream()
+                    .anyMatch(c -> "employeeCreated".equals(c.getTopicName()) &&
+                            c.getTopicPublish() != null && c.getTopicPublish()));
+        }
+
+        @Test
+        @DisplayName("Should not affect regular app builds when appType is not set")
+        void regularAppUnaffectedWhenAppTypeNull() throws SQLException {
+            ScanData scanData = new ScanData();
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("testFunc", "gov.service.IService.testFunc(...)");
+            scanData.setFunctionMappings(functionMappings);
+            scanData.setEntryPointChildren(Map.of("testFunc", new EntryPointDependencies()));
+
+            mockScanService.addScan("SERVICE", "commit1", false, null, scanData);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("regular-app");
+            // appType not set — should behave as nimbus (regular)
+            request.addService("SERVICE", "commit1");
+
+            BuildResult result = builder.build(null, request);
+
+            // Regular behavior: function in pool
+            assertEquals(1, result.getFunctionPool().size());
+            assertTrue(result.getFunctionPool().containsKey("testfunc"));
+        }
+    }
+
     // Mock implementations for testing
 
     private static class MockServiceScanService extends ServiceScanService {

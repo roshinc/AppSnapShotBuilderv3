@@ -148,11 +148,15 @@ public class AppSnapshotBuilder {
 
         // Process each service in dependency order
         String appName = request.getAppName();
+        boolean isNimba = request.isNimbaApp();
         for (String serviceId : sortedServiceIds) {
             ScanDataWithMetadata scanMetadata = scansByServiceId.get(serviceId);
             ScanData scanData = scanMetadata.scanData();
 
-            if (scanMetadata.isUiService()) {
+            if (isNimba) {
+                // Nimba apps: discard the implicit function, promote its children to app root
+                processNimbaService(serviceId, scanData, appRoot, result, transitiveResolver);
+            } else if (scanMetadata.isUiService()) {
                 // Process UI service
                 processUiService(serviceId, scanData, appRoot, result, transitiveResolver);
             } else {
@@ -226,6 +230,37 @@ public class AppSnapshotBuilder {
 
         LOGGER.debug("Processed regular service {}: {} functions",
                 serviceId, functionMappings.size());
+    }
+
+    /**
+     * Processes a nimba service: discards the implicit function and promotes its
+     * children directly under the app root. Nothing is added to the function pool.
+     */
+    private void processNimbaService(String serviceId,
+                                      ScanData scanData,
+                                      AppTemplateNode appRoot,
+                                      BuildResult result,
+                                      TransitiveResolver transitiveResolver) {
+        Map<String, String> functionMappings = scanData.getFunctionMappings();
+        if (functionMappings == null || functionMappings.isEmpty()) {
+            LOGGER.debug("Nimba service {} has no function mappings", serviceId);
+            return;
+        }
+
+        Map<String, EntryPointDependencies> entryPointChildren = scanData.getEntryPointChildren();
+
+        // Nimba apps have exactly one implicit function — discard it but promote its children
+        for (String implicitFunctionName : functionMappings.keySet()) {
+            EntryPointDependencies deps = entryPointChildren != null ?
+                    entryPointChildren.get(implicitFunctionName) : null;
+
+            if (deps != null) {
+                addDependenciesToMethodNode(deps, appRoot, transitiveResolver);
+            }
+
+            LOGGER.debug("Nimba service {}: discarded implicit function '{}', promoted its children to app root",
+                    serviceId, implicitFunctionName);
+        }
     }
 
     /**

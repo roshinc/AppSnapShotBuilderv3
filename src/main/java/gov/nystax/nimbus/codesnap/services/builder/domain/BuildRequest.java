@@ -1,6 +1,8 @@
 package gov.nystax.nimbus.codesnap.services.builder.domain;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonValue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +29,9 @@ public class BuildRequest {
     @JsonProperty("appName")
     private String appName;
 
+    @JsonProperty("appType")
+    private AppType appType = AppType.NIMBUS;
+
     @JsonProperty("services")
     private List<ServiceCommitInfo> services;
 
@@ -41,6 +46,18 @@ public class BuildRequest {
 
     public String getAppName() {
         return appName;
+    }
+
+    public AppType getAppType() {
+        return appType;
+    }
+
+    public void setAppType(AppType appType) {
+        this.appType = appType == null ? AppType.NIMBUS : appType;
+    }
+
+    public boolean isNimbaApp() {
+        return appType == AppType.NIMBA;
     }
 
     public void setAppName(String appName) {
@@ -85,20 +102,54 @@ public class BuildRequest {
         if (o == null || getClass() != o.getClass()) return false;
         BuildRequest that = (BuildRequest) o;
         return Objects.equals(appName, that.appName) &&
+                Objects.equals(appType, that.appType) &&
                 Objects.equals(services, that.services);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(appName, services);
+        return Objects.hash(appName, appType, services);
     }
 
     @Override
     public String toString() {
         return "BuildRequest{" +
                 "appName='" + appName + '\'' +
+                ", appType='" + appType + '\'' +
                 ", services=" + services +
                 '}';
+    }
+
+    /**
+     * The type of application being built.
+     */
+    public enum AppType {
+        NIMBUS("nimbus"),
+        NIMBA("nimba");
+
+        private final String value;
+
+        AppType(String value) {
+            this.value = value;
+        }
+
+        @JsonValue
+        public String getValue() {
+            return value;
+        }
+
+        @JsonCreator
+        public static AppType fromValue(String value) {
+            if (value == null) {
+                return NIMBUS;
+            }
+            for (AppType type : values()) {
+                if (type.value.equalsIgnoreCase(value)) {
+                    return type;
+                }
+            }
+            throw new IllegalArgumentException("Unknown app type: " + value);
+        }
     }
 
     /**
