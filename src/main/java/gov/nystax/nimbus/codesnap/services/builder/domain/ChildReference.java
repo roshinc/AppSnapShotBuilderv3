@@ -14,6 +14,7 @@ import java.util.Objects;
  * <ul>
  *   <li>Sync: {"ref": "functionName"}</li>
  *   <li>Async: {"ref": "functionName", "async": true}</li>
+ *   <li>Scheduled async: {"ref": "functionName", "async": true, "scheduled": true}</li>
  *   <li>Topic: {"topicName": "eventName", "topicPublish": true, "queueName": "QUEUE.NAME"}</li>
  *   <li>Sync CTG: {"ref": "ctg_tz0001z", "ctg": true}</li>
  *   <li>Async CTG: {"ref": "ctg_tz0001z", "ctg": true, "async": true}</li>
@@ -27,6 +28,9 @@ public class ChildReference {
 
     @JsonProperty("async")
     private Boolean async;
+
+    @JsonProperty("scheduled")
+    private Boolean scheduled;
 
     @JsonProperty("topicName")
     private String topicName;
@@ -76,6 +80,22 @@ public class ChildReference {
         ChildReference ref = new ChildReference();
         ref.ref = functionName;
         ref.async = true;
+        return ref;
+    }
+
+    /**
+     * Creates a scheduled asynchronous function reference (invocationType "executeAsyncOnOrAfter").
+     * Marked async (so it is treated as async everywhere) plus a scheduled flag.
+     * The queue name is available on the target function's own top-level pool entry.
+     *
+     * @param functionName the function name to reference
+     * @return a scheduled async function reference
+     */
+    public static ChildReference scheduledAsyncRef(String functionName) {
+        ChildReference ref = new ChildReference();
+        ref.ref = functionName;
+        ref.async = true;
+        ref.scheduled = true;
         return ref;
     }
 
@@ -132,6 +152,10 @@ public class ChildReference {
         return async;
     }
 
+    public Boolean getScheduled() {
+        return scheduled;
+    }
+
     public String getTopicName() {
         return topicName;
     }
@@ -150,6 +174,10 @@ public class ChildReference {
 
     public boolean isAsyncRef() {
         return ref != null && async != null && async;
+    }
+
+    public boolean isScheduledRef() {
+        return ref != null && scheduled != null && scheduled;
     }
 
     public boolean isTopicRef() {
@@ -171,6 +199,7 @@ public class ChildReference {
         ChildReference that = (ChildReference) o;
         return Objects.equals(ref, that.ref) &&
                 Objects.equals(async, that.async) &&
+                Objects.equals(scheduled, that.scheduled) &&
                 Objects.equals(topicName, that.topicName) &&
                 Objects.equals(topicPublish, that.topicPublish) &&
                 Objects.equals(queueName, that.queueName) &&
@@ -179,7 +208,7 @@ public class ChildReference {
 
     @Override
     public int hashCode() {
-        return Objects.hash(ref, async, topicName, topicPublish, queueName, ctg);
+        return Objects.hash(ref, async, scheduled, topicName, topicPublish, queueName, ctg);
     }
 
     @Override
@@ -188,6 +217,12 @@ public class ChildReference {
             return "TopicRef{" + topicName + ", queue=" + queueName + "}";
         }
         String prefix = isCtg() ? "Ctg" : "";
+        if (isScheduledRef()) {
+            if (queueName != null) {
+                return prefix + "ScheduledAsyncRef{" + ref + ", queue=" + queueName + "}";
+            }
+            return prefix + "ScheduledAsyncRef{" + ref + "}";
+        }
         if (isAsyncRef()) {
             if (queueName != null) {
                 return prefix + "AsyncRef{" + ref + ", queue=" + queueName + "}";

@@ -40,6 +40,7 @@ public class ScanDataProcessor {
 
     private static final String INVOCATION_TYPE_EXECUTE = "execute";
     private static final String INVOCATION_TYPE_EXECUTE_ASYNC = "executeAsync";
+    private static final String INVOCATION_TYPE_EXECUTE_ASYNC_ON_OR_AFTER = "executeAsyncOnOrAfter";
     private static final String INVOCATION_TYPE_INVOKE = "invoke";
     private static final String INVOCATION_TYPE_INVOKE_ASYNC = "invokeAsync";
 
@@ -185,6 +186,21 @@ public class ScanDataProcessor {
     }
 
     /**
+     * Routes a function dependency into the correct bucket: scheduled-async, async, or sync.
+     * Scheduled-async ("executeAsyncOnOrAfter") is treated as async with an additional scheduled marker.
+     */
+    private void addFunctionDependency(EntryPointDependencies deps, String functionId,
+                                       boolean isAsync, boolean isScheduledAsync) {
+        if (isScheduledAsync) {
+            deps.addScheduledAsyncFunction(functionId);
+        } else if (isAsync) {
+            deps.addAsyncFunction(functionId);
+        } else {
+            deps.addFunction(functionId);
+        }
+    }
+
+    /**
      * Processes function usages and updates both entryPointChildren and publicMethodDependencies.
      */
     private void processFunctionUsages(ProjectInfo projectInfo,
@@ -211,7 +227,9 @@ public class ScanDataProcessor {
             }
 
             for (FunctionInvocation invocation : invocations) {
-                boolean isAsync = INVOCATION_TYPE_EXECUTE_ASYNC.equals(invocation.getInvocationType());
+                String invocationType = invocation.getInvocationType();
+                boolean isScheduledAsync = INVOCATION_TYPE_EXECUTE_ASYNC_ON_OR_AFTER.equals(invocationType);
+                boolean isAsync = INVOCATION_TYPE_EXECUTE_ASYNC.equals(invocationType);
                 List<MethodReference> callChain = invocation.getCallChain();
 
                 if (callChain == null || callChain.isEmpty()) {
@@ -225,11 +243,7 @@ public class ScanDataProcessor {
                 for (String owner : owners) {
                     EntryPointDependencies deps = entryPointChildren.get(owner);
                     if (deps != null) {
-                        if (isAsync) {
-                            deps.addAsyncFunction(functionId);
-                        } else {
-                            deps.addFunction(functionId);
-                        }
+                        addFunctionDependency(deps, functionId, isAsync, isScheduledAsync);
                     }
                 }
 
@@ -239,11 +253,7 @@ public class ScanDataProcessor {
                         String implMethod = methodRef.getMethodName();
                         EntryPointDependencies methodDeps = publicMethodDeps.computeIfAbsent(
                                 implMethod, k -> new EntryPointDependencies());
-                        if (isAsync) {
-                            methodDeps.addAsyncFunction(functionId);
-                        } else {
-                            methodDeps.addFunction(functionId);
-                        }
+                        addFunctionDependency(methodDeps, functionId, isAsync, isScheduledAsync);
                     }
                 }
             }

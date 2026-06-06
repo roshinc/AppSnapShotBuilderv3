@@ -332,6 +332,16 @@ public class AppSnapshotBuilder {
             }
         }
 
+        // Add scheduled async function dependencies
+        Set<String> scheduledAsyncFunctions = deps.getScheduledAsyncFunctions();
+        if (scheduledAsyncFunctions != null) {
+            for (String funcName : scheduledAsyncFunctions) {
+                if (!poolEntry.containsScheduledAsyncRef(funcName)) {
+                    poolEntry.addScheduledAsyncRef(funcName);
+                }
+            }
+        }
+
         // Add topic dependencies
         Set<String> topics = deps.getTopics();
         if (topics != null) {
@@ -400,6 +410,15 @@ public class AppSnapshotBuilder {
             }
         }
 
+        // Add scheduled async function refs
+        Set<String> scheduledAsyncFunctions = deps.getScheduledAsyncFunctions();
+        if (scheduledAsyncFunctions != null) {
+            for (String funcName : scheduledAsyncFunctions) {
+                String queueName = queueNameResolver.resolveForFunction(funcName);
+                methodNode.addScheduledAsyncFunctionRef(funcName, queueName);
+            }
+        }
+
         // Add topic refs
         Set<String> topics = deps.getTopics();
         if (topics != null) {
@@ -456,6 +475,9 @@ public class AppSnapshotBuilder {
                         ctgNode.setQueueName(queueNameResolver.resolveForFunction(ctgOriginalId));
                     }
                     methodNode.addChild(ctgNode);
+                } else if (child.isScheduledRef()) {
+                    String resolvedQueue = queueNameResolver.resolveForFunction(child.getRef());
+                    methodNode.addScheduledAsyncFunctionRef(child.getRef(), resolvedQueue);
                 } else if (child.isAsyncRef()) {
                     String resolvedQueue = queueNameResolver.resolveForFunction(child.getRef());
                     methodNode.addAsyncFunctionRef(child.getRef(), resolvedQueue);

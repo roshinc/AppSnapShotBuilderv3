@@ -42,6 +42,9 @@ public class AppTemplateNode {
     @JsonProperty("async")
     private Boolean async;
 
+    @JsonProperty("scheduled")
+    private Boolean scheduled;
+
     @JsonProperty("queueName")
     private String queueName;
 
@@ -91,6 +94,19 @@ public class AppTemplateNode {
         AppTemplateNode node = new AppTemplateNode();
         node.ref = functionName;
         node.async = true;
+        node.queueName = queueName;
+        return node;
+    }
+
+    /**
+     * Creates a scheduled async function reference node (timer wrapper, scheduled at/after a time).
+     * Marked async (treated as async everywhere) plus a scheduled flag.
+     */
+    public static AppTemplateNode scheduledAsyncFunctionRef(String functionName, String queueName) {
+        AppTemplateNode node = new AppTemplateNode();
+        node.ref = functionName;
+        node.async = true;
+        node.scheduled = true;
         node.queueName = queueName;
         return node;
     }
@@ -171,6 +187,10 @@ public class AppTemplateNode {
         addChild(asyncFunctionRef(functionName, queueName));
     }
 
+    public void addScheduledAsyncFunctionRef(String functionName, String queueName) {
+        addChild(scheduledAsyncFunctionRef(functionName, queueName));
+    }
+
     public void addTopicPublishRef(String topicName, String queueName) {
         addChild(topicPublishRef(topicName, queueName));
     }
@@ -215,6 +235,14 @@ public class AppTemplateNode {
 
     public void setAsync(Boolean async) {
         this.async = async;
+    }
+
+    public Boolean getScheduled() {
+        return scheduled;
+    }
+
+    public void setScheduled(Boolean scheduled) {
+        this.scheduled = scheduled;
     }
 
     public String getQueueName() {
@@ -278,6 +306,7 @@ public class AppTemplateNode {
                 Objects.equals(type, that.type) &&
                 Objects.equals(ref, that.ref) &&
                 Objects.equals(async, that.async) &&
+                Objects.equals(scheduled, that.scheduled) &&
                 Objects.equals(queueName, that.queueName) &&
                 Objects.equals(topicName, that.topicName) &&
                 Objects.equals(topicPublish, that.topicPublish) &&
@@ -288,7 +317,7 @@ public class AppTemplateNode {
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, type, ref, async, queueName, topicName, topicPublish,
+        return Objects.hash(name, type, ref, async, scheduled, queueName, topicName, topicPublish,
                 ctg, usesLegacyGatewayHttpClient, children);
     }
 

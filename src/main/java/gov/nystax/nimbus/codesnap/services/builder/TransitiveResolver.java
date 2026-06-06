@@ -167,6 +167,16 @@ public class TransitiveResolver {
             }
         }
 
+        // Add scheduled async function dependencies
+        Set<String> scheduledAsyncFunctions = deps.getScheduledAsyncFunctions();
+        if (scheduledAsyncFunctions != null) {
+            for (String funcName : scheduledAsyncFunctions) {
+                if (!targetEntry.containsScheduledAsyncRef(funcName)) {
+                    targetEntry.addScheduledAsyncRef(funcName);
+                }
+            }
+        }
+
         // Add topic dependencies
         Set<String> topics = deps.getTopics();
         if (topics != null) {

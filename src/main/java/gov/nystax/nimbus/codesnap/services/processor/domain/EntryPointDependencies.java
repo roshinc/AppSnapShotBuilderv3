@@ -29,6 +29,13 @@ public class EntryPointDependencies {
     private Set<String> asyncFunctions;
 
     /**
+     * Scheduled asynchronous function calls (invocationType: "executeAsyncOnOrAfter").
+     * Treated as async, but additionally flagged as scheduled. Queue names are resolved at build time.
+     */
+    @JsonProperty("scheduledAsyncFunctions")
+    private Set<String> scheduledAsyncFunctions;
+
+    /**
      * Topic publish events (topicResolution: "RESOLVED").
      * Contains topic names.
      */
@@ -64,6 +71,7 @@ public class EntryPointDependencies {
     public EntryPointDependencies() {
         this.functions = new LinkedHashSet<>();
         this.asyncFunctions = new LinkedHashSet<>();
+        this.scheduledAsyncFunctions = new LinkedHashSet<>();
         this.topics = new LinkedHashSet<>();
         this.ctgComponents = new LinkedHashSet<>();
         this.asyncCtgComponents = new LinkedHashSet<>();
@@ -77,6 +85,7 @@ public class EntryPointDependencies {
         EntryPointDependencies copy = new EntryPointDependencies();
         copy.functions = new LinkedHashSet<>(this.functions);
         copy.asyncFunctions = new LinkedHashSet<>(this.asyncFunctions);
+        copy.scheduledAsyncFunctions = new LinkedHashSet<>(this.scheduledAsyncFunctions);
         copy.topics = new LinkedHashSet<>(this.topics);
         copy.ctgComponents = new LinkedHashSet<>(this.ctgComponents);
         copy.asyncCtgComponents = new LinkedHashSet<>(this.asyncCtgComponents);
@@ -98,6 +107,7 @@ public class EntryPointDependencies {
         }
         this.functions.addAll(other.functions);
         this.asyncFunctions.addAll(other.asyncFunctions);
+        this.scheduledAsyncFunctions.addAll(other.scheduledAsyncFunctions);
         this.topics.addAll(other.topics);
         this.ctgComponents.addAll(other.ctgComponents);
         this.asyncCtgComponents.addAll(other.asyncCtgComponents);
@@ -120,6 +130,7 @@ public class EntryPointDependencies {
     public boolean isEmpty() {
         return functions.isEmpty() &&
                asyncFunctions.isEmpty() &&
+               scheduledAsyncFunctions.isEmpty() &&
                topics.isEmpty() &&
                ctgComponents.isEmpty() &&
                asyncCtgComponents.isEmpty() &&
@@ -133,6 +144,10 @@ public class EntryPointDependencies {
 
     public void addAsyncFunction(String functionName) {
         this.asyncFunctions.add(functionName);
+    }
+
+    public void addScheduledAsyncFunction(String functionName) {
+        this.scheduledAsyncFunctions.add(functionName);
     }
 
     public void addTopic(String topicName) {
@@ -172,6 +187,14 @@ public class EntryPointDependencies {
 
     public void setAsyncFunctions(Set<String> asyncFunctions) {
         this.asyncFunctions = asyncFunctions == null ? new LinkedHashSet<>() : new LinkedHashSet<>(asyncFunctions);
+    }
+
+    public Set<String> getScheduledAsyncFunctions() {
+        return scheduledAsyncFunctions == null ? null : new LinkedHashSet<>(scheduledAsyncFunctions);
+    }
+
+    public void setScheduledAsyncFunctions(Set<String> scheduledAsyncFunctions) {
+        this.scheduledAsyncFunctions = scheduledAsyncFunctions == null ? new LinkedHashSet<>() : new LinkedHashSet<>(scheduledAsyncFunctions);
     }
 
     public Set<String> getTopics() {

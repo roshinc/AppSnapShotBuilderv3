@@ -165,6 +165,26 @@ class ScanDataProcessorTest {
         }
 
         @Test
+        @DisplayName("Should assign scheduled async function dependency to correct owner")
+        void scheduledAsyncFunctionOwnership() {
+            ProjectInfo projectInfo = createProjectInfoWithFunctionUsage(
+                    "insertEmployee",
+                    "gov.nystax.services.wt0004j.IWTEmployeeDBService.insertEmployee(...)",
+                    "gov.nystax.services.wt0004j.impl.WTEmployeeDBServiceImpl.insertEmployee(...)",
+                    "scheduledAsyncFunction",
+                    "executeAsyncOnOrAfter"
+            );
+
+            ScanData result = processor.process(projectInfo);
+
+            EntryPointDependencies deps = result.getEntryPointChildren().get("insertEmployee");
+            assertNotNull(deps);
+            assertTrue(deps.getScheduledAsyncFunctions().contains("scheduledAsyncFunction"));
+            assertTrue(deps.getAsyncFunctions().isEmpty());
+            assertTrue(deps.getFunctions().isEmpty());
+        }
+
+        @Test
         @DisplayName("Should assign function to multiple owners when call chain has multiple entry points")
         void multipleOwners() {
             ProjectInfo projectInfo = createBasicProjectInfo();

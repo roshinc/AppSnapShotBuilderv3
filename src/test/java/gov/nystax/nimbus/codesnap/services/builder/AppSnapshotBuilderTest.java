@@ -217,6 +217,49 @@ class AppSnapshotBuilderTest {
         }
 
         @Test
+        @DisplayName("Should add scheduled async function dependency as a scheduled + async ref")
+        void scheduledAsyncFunctionDependencies() throws SQLException {
+            ScanData scanData = new ScanData();
+            Map<String, String> functionMappings = new HashMap<>();
+            functionMappings.put("parentFunc", "gov.service.IService.parentFunc(...)");
+            scanData.setFunctionMappings(functionMappings);
+
+            EntryPointDependencies deps = new EntryPointDependencies();
+            deps.addScheduledAsyncFunction("scheduledFunc");
+
+            Map<String, EntryPointDependencies> entryPointChildren = new HashMap<>();
+            entryPointChildren.put("parentFunc", deps);
+            scanData.setEntryPointChildren(entryPointChildren);
+
+            mockScanService.addScan("SERVICE", "commit1", false, null, scanData);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("test-app");
+            request.addService("SERVICE", "commit1");
+
+            // Execute
+            BuildResult result = builder.build(null, request);
+
+            // Verify
+            FunctionPoolEntry entry = result.getFunctionPool().get("parentfunc");
+            assertNotNull(entry);
+            assertTrue(entry.containsScheduledAsyncRef("scheduledFunc"));
+            // Scheduled refs are still async, so they are also recognized as async refs
+            assertTrue(entry.containsAsyncRef("scheduledFunc"));
+
+            ChildReference scheduledRef = entry.getChildren().stream()
+                    .filter(ChildReference::isScheduledRef)
+                    .findFirst()
+                    .orElse(null);
+            assertNotNull(scheduledRef);
+            assertEquals(Boolean.TRUE, scheduledRef.getScheduled());
+            assertEquals(Boolean.TRUE, scheduledRef.getAsync());
+            assertTrue(scheduledRef.isAsyncRef());
+            assertNull(scheduledRef.getQueueName(),
+                    "Scheduled async child ref should not carry queueName (available on top-level pool entry)");
+        }
+
+        @Test
         @DisplayName("Should add topic dependencies with queue names")
         void topicDependencies() throws SQLException {
             ScanData scanData = new ScanData();
@@ -368,6 +411,43 @@ class AppSnapshotBuilderTest {
     @Nested
     @DisplayName("UI Service Method Tests")
     class UiServiceMethodTests {
+
+        @Test
+        @DisplayName("Should add scheduled async function ref (async + scheduled + queueName) to UI service method")
+        void uiServiceMethodWithScheduledAsyncFunctionRef() throws SQLException {
+            ScanData scanData = new ScanData();
+            Map<String, String> uiMethodMappings = new HashMap<>();
+            uiMethodMappings.put("retrieveData", "gov.ui.IUI.retrieveData(...)");
+            scanData.setUiServiceMethodMappings(uiMethodMappings);
+
+            EntryPointDependencies deps = new EntryPointDependencies();
+            deps.addScheduledAsyncFunction("scheduledFunc");
+            scanData.setEntryPointChildren(Map.of("retrieveData", deps));
+
+            mockScanService.addScan("UISERVICE", "ui1", true, null, scanData);
+
+            BuildRequest request = new BuildRequest();
+            request.setAppName("ui-test-app");
+            request.addService("UISERVICE", "ui1");
+
+            // Execute
+            BuildResult result = builder.build(null, request);
+
+            // Verify
+            AppTemplateNode uiServices = result.getAppTemplate().getChildren().get(0);
+            AppTemplateNode methodNode = uiServices.getChildren().get(0);
+            assertEquals("retrieveData", methodNode.getName());
+
+            AppTemplateNode scheduledNode = methodNode.getChildren().stream()
+                    .filter(c -> "scheduledFunc".equals(c.getRef()))
+                    .findFirst()
+                    .orElse(null);
+            assertNotNull(scheduledNode);
+            assertEquals(Boolean.TRUE, scheduledNode.getAsync());
+            assertEquals(Boolean.TRUE, scheduledNode.getScheduled());
+            assertNotNull(scheduledNode.getQueueName(),
+                    "Scheduled async app-template node should carry a resolved queueName");
+        }
 
         @Test
         @DisplayName("Should add function refs to UI service methods")

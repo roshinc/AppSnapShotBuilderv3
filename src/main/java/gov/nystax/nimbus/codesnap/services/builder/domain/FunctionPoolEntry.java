@@ -118,6 +118,10 @@ public class FunctionPoolEntry {
         this.children.add(ChildReference.asyncRef(functionName));
     }
 
+    public void addScheduledAsyncRef(String functionName) {
+        this.children.add(ChildReference.scheduledAsyncRef(functionName));
+    }
+
     public void addTopicRef(String topicName, String queueName) {
         this.children.add(ChildReference.topicPublishRef(topicName, queueName));
     }
@@ -144,6 +148,14 @@ public class FunctionPoolEntry {
     public boolean containsAsyncRef(String functionName) {
         return children.stream()
                 .anyMatch(c -> c.isAsyncRef() && functionName.equals(c.getRef()));
+    }
+
+    /**
+     * Checks if this function entry already contains a scheduled async reference to the given function.
+     */
+    public boolean containsScheduledAsyncRef(String functionName) {
+        return children.stream()
+                .anyMatch(c -> c.isScheduledRef() && functionName.equals(c.getRef()));
     }
 
     /**
